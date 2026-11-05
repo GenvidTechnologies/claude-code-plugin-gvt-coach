@@ -14,6 +14,7 @@ This repository is the **`gvt-coach` plugin** for Claude Code. It ships one skil
 | `plugin/skills/<name>/SKILL.md` | One directory per skill. |
 | `plugin/CHANGELOG.md` | Versioned consumer surface. |
 | `.github/scripts/leak-guard.sh` | Blocks machine paths and private names. |
+| `.github/workflows/leak-guard.yml` | Runs the leak guard in CI. |
 | `.gvt-agent.json` | Command registry for gvt-dev skills. |
 | `README.md`, `LICENSE` | Public description and MIT-0 license. |
 

@@ -57,12 +57,14 @@ Stop at once, and run no other command, when any of these is true. Give the coac
 
 | Condition | Message to the coach |
 |---|---|
-| The command does not start, node is missing, or the exit code is not 0 | The preflight failed: this folder is not a gvt-loop workspace, or the coordinator cannot run. Show the exit code and stderr. |
+| The command does not start (node is missing, or the CLI file is missing), or the exit code is not 0 and not 2 | The preflight failed: this folder is not a gvt-loop workspace, or the coordinator cannot run. Show the exit code and stderr. |
+| The exit code is 2 | The workspace configuration is invalid. Show stderr. |
 | The output is not JSON, or has no `coach` key | The workspace is older than this skill. Update the workspace, then run the skill again. |
 | `coach.contract` is not `1` | This skill was written for contract 1 and the workspace reports another number. Update the workspace or the plugin so that they match. |
-| `coach.workspaceRepo` is null | The workspace repository is not known (no readable GitHub `origin` remote). The skill cannot mark the workspace's own issues. |
 
 Keep `coach.workspaceRepo` (`owner/name`) for the later steps.
+
+When `coach.workspaceRepo` is null, the workspace repository is not known (no readable GitHub `origin` remote). Do not stop. Go on with the overview and say that the skill cannot mark the workspace's own issues. In `dispatch`, a dispatch into the workspace's own repository cannot be detected, so ask the coach for explicit confirmation first (see `dispatch`).
 
 ## Overview (no arguments)
 
@@ -120,21 +122,22 @@ Then stop and wait for the coach.
 
 Run this only when the coach has named the issue.
 
-1. If `<ref>` is in `coach.workspaceRepo`, ask the coach to confirm. Only with a clear yes, add `--allow-self` as the first argument after `dispatch`. Without it, the coordinator refuses.
-2. Check the prompt. It must not start with `-`. It must not equal `--json`, `--help`, `-h`, `--config` or `--state-dir`, because the coordinator would read these as flags. If the prompt breaks a rule, ask the coach for another one. With no prompt, the coordinator uses its default.
-3. Run:
-
+1. If `<ref>` is in `coach.workspaceRepo`, ask the coach to confirm. Only with a clear yes, add `--allow-self` as the first argument after `dispatch`. Without it, the coordinator refuses. When `coach.workspaceRepo` is null, the skill cannot tell whether `<ref>` is in the workspace's own repository. Ask the coach to confirm that it is not, or to confirm that it is. Add `--allow-self` only for the second answer.
+2. Check the prompt. It must not start with `-`. It must not equal `--json`, `--help`, `-h`, `--config` or `--state-dir`, because the coordinator would read these as flags. It must not contain a single quote. If the prompt breaks a rule, ask the coach for another one. With no prompt, the coordinator uses its default.
+3. Pass the prompt as one argument: put it in single quotes in the Bash command.
+4. Run:
 ```
-node "${CLAUDE_PROJECT_DIR}/bin/gvt-loop.mjs" --json dispatch [--allow-self] <ref> [prompt]
+node "${CLAUDE_PROJECT_DIR}/bin/gvt-loop.mjs" --json dispatch [--allow-self] <ref> ['prompt']
 ```
 
 Report from the JSON: `status`, `step`, `claim` and `rollback`.
 
 - `created`: report `path` and `shortId`.
 - `noop`: the issue is already held with a live session. Nothing was started.
+- `adopted`: a session already existed, and the claim is kept. Exit 0 means the session is live. Exit 1 means the adopted session is not live (`done`, `failed` or `stopped`).
 - A refused claim: report each entry of `reasons`.
 - A failed or rolled-back run: report `step`, `reason`, and whether the claim was released (`rollback`).
-- A kept claim: the coordinator names a follow-up. Report it: run `dispatch` again to adopt the session, or run `release`. For an adopted session that is not live, the follow-up is `worktree remove`, then `release` (the wrap steps below, without `--require-merged` only if the coach agrees that the work may be dropped).
+- A kept claim: the coordinator names a follow-up. Report it: run `dispatch` again to adopt the session, or run `release`. For an adopted session that is not live, the follow-up is `worktree remove <ref>`, then `release` (the wrap steps below). Plain `worktree remove` keeps its safety checks. Add `--discard` only when the coach says the work may be dropped.
 - A release that failed during rollback: say that the lease stays in `releasing` and that `release` for the ref must run.
 
 Do not start another dispatch in the same turn.
@@ -142,6 +145,8 @@ Do not start another dispatch in the same turn.
 ## wrap `<ref>`
 
 Run the steps in order. Stop at the first non-zero exit.
+
+Before step 1, tell the coach that `worktree remove` stops a worker session that is still running. This matters when the issue is closed but its worker still runs.
 
 1. Remove the worktree and prove the merge:
 
@@ -169,20 +174,21 @@ node "${CLAUDE_PROJECT_DIR}/bin/gvt-loop.mjs" --json worktree remove --discard <
 node "${CLAUDE_PROJECT_DIR}/bin/gvt-loop.mjs" --json worktree finish <ref>
 ```
 
-- `branch-kept`: the worktree and session are gone, but the local branch stayed. Show `reason`. Offer `worktree finish` as above.
+- `branch-kept`: the worktree and session are gone, but the local branch stayed. Show `reason`. The merge was proved in step 1, so no work is lost. `git branch -d` refuses a branch whose commits are not in the base, as after a squash merge. Offer `worktree finish` as above. If the branch is still kept, tell the coach that only the local branch is left, and ask whether to release the claim (step 2).
 - `failed`: show `reason` and stop.
 
 Results of `worktree finish`:
 
 - `removed`: go to step 2.
 - `held`: show `holders` and `hint`. The coach closes the programs. Run `worktree finish` again.
-- `branch-kept`: show `reason`. The branch has commits that are not merged. The coach merges or pushes them, or says that the work should be dropped.
+- `branch-kept`: show `reason`. The merge was proved in step 1, so only the local branch is left. The coach can delete it by hand outside the skill. Ask whether to release the claim (step 2).
 - Anything else: show `reason` and stop.
 
 Results of `release`:
 
 - `released`: the wrap is done.
-- A failure (exit 1): report `reason` and the lease state. Say that the coach can run `release` again. The coordinator's `expire` command also retries a release. It is not part of this skill, so the coach runs it outside the skill.
+- `none` (exit 1) on a rerun: the claim is already gone. Report "already released". Do not retry.
+- Another failure (exit 1): report `reason`. Then run `status` and report the `lease.state` of that worker from it. Say that the coach can run `release` again. The coordinator's `expire` command also retries a release. It is not part of this skill, so the coach runs it outside the skill.
 
 After the wrap, read `branchRecord` in the `worktree remove` result. If `recorded` or `dropped` is not null, say that `config/branches.json` changed and that the coach should commit it. Do not commit it. Show `branchRecord.warning` when it is present.
 
@@ -198,7 +204,7 @@ Every command uses the same codes. The table says what the skill does for each o
 | `ready` | Show the list. | Claims database has another schema version. List missing. | Invalid config. Stop. | Wrong argument. Stop. | Not used. |
 | `why` | Show `ready` and `reasons`. | Issue is not in the cache. Suggest `sync`. | Invalid config. Stop. | Bad ref or unknown repo. Ask for another. | Not used. |
 | `dispatch` | `created`, `noop` or an adopted live session. Report. | Refused, failed, rolled back, or an adopted session that is not live. Report `reasons`, `step`, `reason`, `rollback`. | `claimAccount` not set, or invalid config. Stop. | Wrong arguments (for example a prompt that starts with `-`). Ask for another. | Not used. |
-| `release` | Released. | No claim to release, or the GitHub update failed. Report and offer a retry. | Invalid config. Stop. | Wrong ref. Ask for another. | Not used. |
+| `release` | Released. | `none` (no claim, so already released) or the GitHub update failed. Report. Retry only after a failure. | Invalid config. Stop. | Wrong ref. Ask for another. | Not used. |
 | `worktree remove` | `removed`. Go on. | `refused`, `half-removed`, `branch-kept` or `failed`. Follow the wrap steps. | Invalid config. Stop. | Wrong arguments, or `--discard` with `--require-merged`. Stop. | Not used. |
 | `worktree finish` | `removed`. Go on. | A step was refused, held or failed, or the branch was kept. Follow the wrap steps. | Invalid config. Stop. | Wrong arguments. Stop. | Not used. |
 
@@ -210,7 +216,7 @@ This skill was written for `coach.contract: 1`. The preflight refuses any other 
 |---|---|
 | `check-config` | `coach.contract`, `coach.workspaceRepo` |
 | `sync` | `errors`, `stopped.reason`, `stopped.resetAt` |
-| `status` | `agents.ok`, `agents.error`, `workers[].key`, `state`, `reason`, `detail`, `session.agentsState`, `session.shortId`, `issue.title`, `issue.state`, `issue.closingPrs` |
+| `status` | `agents.ok`, `agents.error`, `workers[].key`, `state`, `reason`, `detail`, `session.agentsState`, `session.shortId`, `lease.state`, `issue.title`, `issue.state`, `issue.closingPrs` |
 | `ready` | `ready[].key`, `ready[].title` |
 | `why` | `ready`, `reasons` |
 | `dispatch` | `status`, `step`, `claim`, `rollback`, `reasons`, `reason`, `shortId`, `path` |
