@@ -1,18 +1,18 @@
 ---
 name: coach
-description: Runs the coach's overview of a gvt-loop workspace (workers that need you, wrap-up candidates, ready issues), dispatches one issue the coach names, and wraps up a finished worker. Use only in a gvt-loop workspace, when the coach types /gvt-coach:coach, optionally with "dispatch <ref> [prompt]" or "wrap <ref>".
+description: Runs the coach's overview of a gvt-fleet workspace (workers that need you, wrap-up candidates, ready issues), dispatches one issue the coach names, and wraps up a finished worker. Use only in a gvt-fleet workspace, when the coach types /gvt-fleet:coach, optionally with "dispatch <ref> [prompt]" or "wrap <ref>".
 disable-model-invocation: true
 allowed-tools:
-  - Bash(node "${CLAUDE_PROJECT_DIR}/bin/gvt-loop.mjs" --json check-config)
-  - Bash(node "${CLAUDE_PROJECT_DIR}/bin/gvt-loop.mjs" --json sync)
-  - Bash(node "${CLAUDE_PROJECT_DIR}/bin/gvt-loop.mjs" --json status)
-  - Bash(node "${CLAUDE_PROJECT_DIR}/bin/gvt-loop.mjs" --json ready)
-  - Bash(node "${CLAUDE_PROJECT_DIR}/bin/gvt-loop.mjs" --json why *)
+  - Bash(node "${CLAUDE_PROJECT_DIR}/bin/gvt-fleet.mjs" --json check-config)
+  - Bash(node "${CLAUDE_PROJECT_DIR}/bin/gvt-fleet.mjs" --json sync)
+  - Bash(node "${CLAUDE_PROJECT_DIR}/bin/gvt-fleet.mjs" --json status)
+  - Bash(node "${CLAUDE_PROJECT_DIR}/bin/gvt-fleet.mjs" --json ready)
+  - Bash(node "${CLAUDE_PROJECT_DIR}/bin/gvt-fleet.mjs" --json why *)
 ---
 
 # Coach
 
-This skill drives the `gvt-loop` coordinator for the coach. The coordinator is a command-line tool in the workspace. The skill reads its JSON output and reports it. The coach decides; the skill does not.
+This skill drives the `gvt-fleet` coordinator for the coach. The coordinator is a command-line tool in the workspace. The skill reads its JSON output and reports it. The coach decides; the skill does not.
 
 `$ARGUMENTS` selects the mode:
 
@@ -29,7 +29,7 @@ Five read commands are pre-approved: `check-config`, `sync`, `status`, `ready` a
 Run every command in exactly this form. The subcommand comes right after `--json`. Flags come after the subcommand.
 
 ```
-node "${CLAUDE_PROJECT_DIR}/bin/gvt-loop.mjs" --json <subcommand> [flags] [arguments]
+node "${CLAUDE_PROJECT_DIR}/bin/gvt-fleet.mjs" --json <subcommand> [flags] [arguments]
 ```
 
 `${CLAUDE_PROJECT_DIR}` is the folder where the coach started Claude Code. The skill uses no other path to the coordinator and no path that is written in the skill itself.
@@ -50,14 +50,14 @@ node "${CLAUDE_PROJECT_DIR}/bin/gvt-loop.mjs" --json <subcommand> [flags] [argum
 Run this first, in every mode:
 
 ```
-node "${CLAUDE_PROJECT_DIR}/bin/gvt-loop.mjs" --json check-config
+node "${CLAUDE_PROJECT_DIR}/bin/gvt-fleet.mjs" --json check-config
 ```
 
 Stop at once, and run no other command, when any of these is true. Give the coach the matching message:
 
 | Condition | Message to the coach |
 |---|---|
-| The command does not start (node is missing, or the CLI file is missing), or the exit code is not 0 and not 2 | The preflight failed: this folder is not a gvt-loop workspace, or the coordinator cannot run. Show the exit code and stderr. |
+| The command does not start (node is missing, or the CLI file is missing), or the exit code is not 0 and not 2 | The preflight failed: this folder is not a gvt-fleet workspace, or the coordinator cannot run. Show the exit code and stderr. |
 | The exit code is 2 | The workspace configuration is invalid. Show stderr. |
 | The output is not JSON, or has no `coach` key | The workspace is older than this skill. Update the workspace, then run the skill again. |
 | `coach.contract` is not `1` | This skill was written for contract 1 and the workspace reports another number. Update the workspace or the plugin so that they match. |
@@ -73,7 +73,7 @@ After the preflight, run these four steps in order. They write nothing to GitHub
 ### 1. Refresh the cache
 
 ```
-node "${CLAUDE_PROJECT_DIR}/bin/gvt-loop.mjs" --json sync
+node "${CLAUDE_PROJECT_DIR}/bin/gvt-fleet.mjs" --json sync
 ```
 
 - Exit 0: go on.
@@ -84,7 +84,7 @@ node "${CLAUDE_PROJECT_DIR}/bin/gvt-loop.mjs" --json sync
 ### 2. Show the workers
 
 ```
-node "${CLAUDE_PROJECT_DIR}/bin/gvt-loop.mjs" --json status
+node "${CLAUDE_PROJECT_DIR}/bin/gvt-fleet.mjs" --json status
 ```
 
 - Keep the order of `workers`. `status` sorts `needs-you`, then `rate-limited`, then the rest.
@@ -99,7 +99,7 @@ node "${CLAUDE_PROJECT_DIR}/bin/gvt-loop.mjs" --json status
 ### 3. Show the ready issues
 
 ```
-node "${CLAUDE_PROJECT_DIR}/bin/gvt-loop.mjs" --json ready
+node "${CLAUDE_PROJECT_DIR}/bin/gvt-fleet.mjs" --json ready
 ```
 
 Show each entry of `ready` with `key` and `title`. List the issues of `coach.workspaceRepo` separately, or mark them. Say that dispatching one needs the coach's explicit choice, because `dispatch` refuses it without `--allow-self`.
@@ -111,7 +111,7 @@ On exit 1 (the claims database has another schema version), exit 2 or exit 64, s
 When the coach asks why an issue is or is not ready:
 
 ```
-node "${CLAUDE_PROJECT_DIR}/bin/gvt-loop.mjs" --json why <ref>
+node "${CLAUDE_PROJECT_DIR}/bin/gvt-fleet.mjs" --json why <ref>
 ```
 
 Show `ready` and each entry of `reasons` (`code`, `detail`). Exit 0 is a valid answer whether `ready` is true or false. On exit 1, tell the coach to run the overview again so that `sync` fills the cache. On exit 64, the ref or repo is not known.
@@ -127,7 +127,7 @@ Run this only when the coach has named the issue.
 3. Pass the prompt as one argument: put it in single quotes in the Bash command.
 4. Run:
 ```
-node "${CLAUDE_PROJECT_DIR}/bin/gvt-loop.mjs" --json dispatch [--allow-self] <ref> ['prompt']
+node "${CLAUDE_PROJECT_DIR}/bin/gvt-fleet.mjs" --json dispatch [--allow-self] <ref> ['prompt']
 ```
 
 Report from the JSON: `status`, `step`, `claim` and `rollback`. If the command exits 1 and stdout holds no JSON (for example an issue that cannot be read), show stderr and stop.
@@ -151,13 +151,13 @@ Before step 1, tell the coach that `worktree remove` stops a worker session that
 1. Remove the worktree and prove the merge:
 
 ```
-node "${CLAUDE_PROJECT_DIR}/bin/gvt-loop.mjs" --json worktree remove --require-merged <ref>
+node "${CLAUDE_PROJECT_DIR}/bin/gvt-fleet.mjs" --json worktree remove --require-merged <ref>
 ```
 
 2. Release the claim when step 1 exits 0 (`removed`), when `worktree finish` returns `removed`, or when the coach agrees to release after `branch-kept`:
 
 ```
-node "${CLAUDE_PROJECT_DIR}/bin/gvt-loop.mjs" --json release <ref>
+node "${CLAUDE_PROJECT_DIR}/bin/gvt-fleet.mjs" --json release <ref>
 ```
 
 Results of step 1:
@@ -166,12 +166,12 @@ Results of step 1:
 - `refused`: show `reason`, and each entry of `problems` when present. Show `pr` and `pushedBranch` when they are not null. Stop. Do not suggest `--discard`. If the problem is an unmerged pull request, the coach merges it and runs the wrap again. If the work is not pushed, the coach pushes it. Offer `--discard` only after the coach says, in words, that the work should be dropped. Then run the command below, never with `--require-merged` (the coordinator exits 64 for both flags together):
 
 ```
-node "${CLAUDE_PROJECT_DIR}/bin/gvt-loop.mjs" --json worktree remove --discard <ref>
+node "${CLAUDE_PROJECT_DIR}/bin/gvt-fleet.mjs" --json worktree remove --discard <ref>
 ```
 - `half-removed`: show `holders` and `hint`. Tell the coach to close those programs. Then offer:
 
 ```
-node "${CLAUDE_PROJECT_DIR}/bin/gvt-loop.mjs" --json worktree finish <ref>
+node "${CLAUDE_PROJECT_DIR}/bin/gvt-fleet.mjs" --json worktree finish <ref>
 ```
 
 - `branch-kept`: the worktree and session are gone, but the local branch stayed. Show `reason`. The merge was proved in step 1, so no work is lost. By the git documentation, `git branch -d` compares the branch with its upstream when one is set, and otherwise with the HEAD of the base clone. So it refuses when the branch has no upstream, or its remote-tracking branch is gone (for example deleted on merge and pruned by a fetch), and its commits are not in that HEAD, as after a squash merge. Offer `worktree finish` as above. It uses the same `git branch -d`, so it will likely keep the branch again. In that case, tell the coach that only the local branch is left. The coach can delete it by hand outside the skill. Then ask whether to release the claim (step 2).

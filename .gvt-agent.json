@@ -1,7 +1,7 @@
 {
   "project": {
-    "name": "claude-code-plugin-gvt-coach",
-    "description": "The gvt-coach Claude Code plugin: the /gvt-coach:coach skill for the gvt-loop multi-repo coordinator."
+    "name": "claude-code-plugin-gvt-fleet",
+    "description": "The gvt-fleet Claude Code plugin: the /gvt-fleet:coach skill for the gvt-fleet multi-repo coordinator."
   },
   "commands": {
     "validate": "bash .github/scripts/leak-guard.sh && claude plugin validate plugin"

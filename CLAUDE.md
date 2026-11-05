@@ -4,7 +4,7 @@ Guidance for Claude Code when working in this repository.
 
 ## Purpose
 
-This repository is the **`gvt-coach` plugin** for Claude Code. It ships one skill, `/gvt-coach:coach`, the coach's entry point for the gvt-loop multi-repo coordinator. The skill runs only in a session started at the root of a gvt-loop workspace, and it depends on the `gvt-dev` plugin. The plugin is published through the `claude-code-gvt-marketplace` catalog (marketplace name `gvt-plugins`).
+This repository is the **`gvt-fleet` plugin** for Claude Code. It ships one skill, `/gvt-fleet:coach`, the coach's entry point for the gvt-fleet multi-repo coordinator. The skill runs only in a session started at the root of a gvt-fleet workspace, and it depends on the `gvt-dev` plugin. The plugin is published through the `claude-code-gvt-marketplace` catalog (marketplace name `gvt-plugins`).
 
 ## Layout
 
@@ -36,4 +36,4 @@ This repository is the **`gvt-coach` plugin** for Claude Code. It ships one skil
 
 ## Coordinator contract
 
-The skill pins the `coach.contract` number that the gvt-loop CLI reports. When the workspace raises that number, update the skill to match.
+The skill pins the `coach.contract` number that the gvt-fleet CLI reports. When the workspace raises that number, update the skill to match.
