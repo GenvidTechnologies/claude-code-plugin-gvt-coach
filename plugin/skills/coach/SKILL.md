@@ -130,14 +130,14 @@ Run this only when the coach has named the issue.
 node "${CLAUDE_PROJECT_DIR}/bin/gvt-loop.mjs" --json dispatch [--allow-self] <ref> ['prompt']
 ```
 
-Report from the JSON: `status`, `step`, `claim` and `rollback`.
+Report from the JSON: `status`, `step`, `claim` and `rollback`. If the command exits 1 and stdout holds no JSON (for example an issue that cannot be read), show stderr and stop.
 
 - `created`: report `path` and `shortId`.
 - `noop`: the issue is already held with a live session. Nothing was started.
 - `adopted`: a session already existed, and the claim is kept. Exit 0 means the session is live. Exit 1 means the adopted session is not live (`done`, `failed` or `stopped`).
 - A refusal carries either `reasons` or a single `reason` (with `step`). Show whichever is present: each entry of `reasons`, or `reason` and `step`.
 - A failed or rolled-back run: report `step`, `reason`, and whether the claim was released (`rollback`).
-- A kept claim: the coordinator names a follow-up. Report it: run `dispatch` again to adopt the session, or run `release`. For an adopted session that is not live, do these steps in order. First run `worktree remove <ref>` with no `--require-merged`; it keeps its safety checks. Then run `release <ref>`. Add `--discard` to `worktree remove` only when the coach says the work may be dropped.
+- A kept claim: the coordinator names a follow-up. Report it: run `dispatch` again to adopt the session, or run `release`. For an adopted session that is not live, do these steps in order. First run `worktree remove <ref>` with no `--require-merged`; it keeps its safety checks. Then run `release <ref>`, but only when `worktree remove` returned `removed`; otherwise stop and report its result. Add `--discard` to `worktree remove` only when the coach says the work may be dropped.
 - A release that failed during rollback: say that the lease stays in `releasing` and that `release` for the ref must run.
 
 Do not start another dispatch in the same turn.
@@ -154,7 +154,7 @@ Before step 1, tell the coach that `worktree remove` stops a worker session that
 node "${CLAUDE_PROJECT_DIR}/bin/gvt-loop.mjs" --json worktree remove --require-merged <ref>
 ```
 
-2. When step 1 exits 0 (`removed`), release the claim:
+2. Release the claim when step 1 exits 0 (`removed`), when `worktree finish` returns `removed`, or when the coach agrees to release after `branch-kept`:
 
 ```
 node "${CLAUDE_PROJECT_DIR}/bin/gvt-loop.mjs" --json release <ref>
@@ -174,7 +174,7 @@ node "${CLAUDE_PROJECT_DIR}/bin/gvt-loop.mjs" --json worktree remove --discard <
 node "${CLAUDE_PROJECT_DIR}/bin/gvt-loop.mjs" --json worktree finish <ref>
 ```
 
-- `branch-kept`: the worktree and session are gone, but the local branch stayed. Show `reason`. The merge was proved in step 1, so no work is lost. After a proven merge, `git branch -d` still succeeds while the remote-tracking branch of the local branch exists at its tip. It refuses when that remote-tracking branch is gone, for example when the remote branch was deleted on merge and a fetch pruned it, because git then compares the branch with the HEAD of the base clone. Offer `worktree finish` as above. It uses the same `git branch -d`, so it will likely keep the branch again. In that case, tell the coach that only the local branch is left. The coach can delete it by hand outside the skill. Then ask whether to release the claim (step 2).
+- `branch-kept`: the worktree and session are gone, but the local branch stayed. Show `reason`. The merge was proved in step 1, so no work is lost. By the git documentation, `git branch -d` compares the branch with its upstream when one is set, and otherwise with the HEAD of the base clone. So it refuses when the branch has no upstream, or its remote-tracking branch is gone (for example deleted on merge and pruned by a fetch), and its commits are not in that HEAD, as after a squash merge. Offer `worktree finish` as above. It uses the same `git branch -d`, so it will likely keep the branch again. In that case, tell the coach that only the local branch is left. The coach can delete it by hand outside the skill. Then ask whether to release the claim (step 2).
 - `failed`: show `reason` and stop.
 
 Results of `worktree finish`:
@@ -190,7 +190,7 @@ Results of `release`:
 - `none` (exit 1) on a rerun: the claim is already gone. Report "already released". Do not retry.
 - Another failure (exit 1): report `reason`. Then run `status` and report the `lease.state` of that worker from it. Say that the coach can run `release` again. The coordinator's `expire` command also retries a release. It is not part of this skill, so the coach runs it outside the skill.
 
-After the wrap, read `branchRecord` in the `worktree remove` result. If `recorded` or `dropped` is not null, say that `config/branches.json` changed and that the coach should commit it. Do not commit it. Show `branchRecord.warning` when it is present.
+After the wrap, and also when the wrap stops at `refused` or `half-removed`, read `branchRecord` in the `worktree remove` result. If `recorded` or `dropped` is not null, say that `config/branches.json` changed and that the coach should commit it. Do not commit it. Show `branchRecord.warning` when it is present.
 
 ## Exit codes
 
@@ -203,7 +203,7 @@ Every command uses the same codes. The table says what the skill does for each o
 | `status` | Complete view. | Agents list unreadable (`agents.ok` false): show the view and say liveness and lease refresh did not run. Or the claims database has another schema version: stop. | Invalid config. Stop. | Wrong argument. Stop. | Not used. |
 | `ready` | Show the list. | Claims database has another schema version. List missing. | Invalid config. Stop. | Wrong argument. Stop. | Not used. |
 | `why` | Show `ready` and `reasons`. | Issue is not in the cache. Suggest `sync`. | Invalid config. Stop. | Bad ref or unknown repo. Ask for another. | Not used. |
-| `dispatch` | `created`, `noop` or an adopted live session. Report. | Refused, failed, rolled back, or an adopted session that is not live. Report `reasons`, `step`, `reason`, `rollback`. | `claimAccount` not set, invalid config, a refused trust path, or a refused settings file. Stop. | Wrong arguments (for example a prompt that starts with `-`). Ask for another. | Not used. |
+| `dispatch` | `created`, `noop` or an adopted live session. Report. | Refused (a refused trust path included), failed, rolled back, or an adopted session that is not live. Report `reasons`, `step`, `reason`, `rollback`. If stdout holds no JSON, show stderr and stop. | `claimAccount` not set, or invalid config. Stop. | Wrong arguments (for example a prompt that starts with `-`). Ask for another. | Not used. |
 | `release` | Released. | `none` (no claim, so already released) or the GitHub update failed. Report. Retry only after a failure. | Invalid config. Stop. | Wrong ref. Ask for another. | Not used. |
 | `worktree remove` | `removed`. Go on. | `refused`, `half-removed`, `branch-kept` or `failed`. Follow the wrap steps. | Invalid config. Stop. | Wrong arguments, or `--discard` with `--require-merged`. Stop. | Not used. |
 | `worktree finish` | `removed`. Go on. | A step was refused, held or failed, or the branch was kept. Follow the wrap steps. | Invalid config. Stop. | Wrong arguments. Stop. | Not used. |
