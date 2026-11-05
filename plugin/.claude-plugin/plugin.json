@@ -1,0 +1,12 @@
+{
+  "name": "gvt-coach",
+  "version": "0.1.0",
+  "description": "The /gvt-coach:coach skill, the coach's entry point for the gvt-loop multi-repo coordinator; it runs in a gvt-loop workspace.",
+  "author": {
+    "name": "Genvid"
+  },
+  "repository": "https://github.com/GenvidTechnologies/claude-code-plugin-gvt-coach",
+  "license": "MIT-0",
+  "keywords": ["genvid", "coach", "gvt-loop"],
+  "dependencies": ["gvt-dev"]
+}
