@@ -1,0 +1,27 @@
+{
+  "project": {
+    "name": "claude-code-plugin-gvt-fleet",
+    "description": "The gvt-fleet Claude Code plugin: the /gvt-fleet:coach skill for the gvt-fleet multi-repo coordinator."
+  },
+  "commands": {
+    "validate": "bash .github/scripts/leak-guard.sh && claude plugin validate plugin"
+  },
+  "repo": {
+    "default_branch": "main",
+    "host": "github"
+  },
+  "paths": {
+    "plugin_root": "plugin"
+  },
+  "bugTracker": {
+    "kind": "github",
+    "actionQuery": "gh issue list --state open -L 500 --json number,title,labels,body,assignees,author,createdAt,milestone",
+    "comparisonQuery": "gh issue list --state all -L 1000 --json number,title,labels,state",
+    "readOne": "gh issue view {id} --json number,title,body,labels,comments",
+    "commentsQuery": "gh issue list --state open -L 500 --json number,comments",
+    "structureQuery": "gh issue list --state open -L 500 --json number,parent,subIssuesSummary",
+    "refStateQuery": "gh api repos/{repo}/issues/{id} --jq '{number,state,state_reason,closed_at,pull_request:(.pull_request != null),sub_issues_summary}'",
+    "triagedLabel": "triaged",
+    "needsInfoLabel": "needs-info"
+  }
+}
