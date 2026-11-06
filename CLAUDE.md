@@ -13,6 +13,7 @@ This repository is the **`gvt-fleet` plugin** for Claude Code. It ships one skil
 | `plugin/.claude-plugin/plugin.json` | Plugin manifest. Its `version` is the plugin version. |
 | `plugin/skills/<name>/SKILL.md` | One directory per skill. |
 | `plugin/CHANGELOG.md` | Versioned consumer surface. |
+| `docs/decisions/` | Decision records, `NNNN-kebab-title.md`. |
 | `.github/scripts/leak-guard.sh` | Blocks machine paths and private names. |
 | `.github/workflows/leak-guard.yml` | Runs the leak guard in CI. |
 | `.gvt-agent.json` | Command registry for gvt-dev skills. |
@@ -32,7 +33,7 @@ This repository is the **`gvt-fleet` plugin** for Claude Code. It ships one skil
 - **License:** MIT-0.
 - **No machine paths and no private names** in any file. `.github/scripts/leak-guard.sh` enforces this. Read the script for the blocked names, and do not copy them into a file.
 - **Skill names** are short nouns.
-- **Decision records**, when the first one is needed, go in `docs/decisions/`. Version 0.1.0 ships none.
+- **Decision records** go in `docs/decisions/`, numbered `NNNN-kebab-title.md`. Version 0.1.0 ships none. The first record is 0001.
 
 ## Coordinator contract
 
