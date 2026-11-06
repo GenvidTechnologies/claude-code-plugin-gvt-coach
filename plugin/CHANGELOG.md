@@ -7,6 +7,8 @@ and follows [semantic versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-11-05
+
 ### Added
 
 - **`/gvt-fleet:coach` skill.** The coach's entry point for the gvt-fleet multi-repo coordinator. It reads issues, shows the workers that need the coach and the ready issues, dispatches an issue on request, and wraps up a finished worker.
