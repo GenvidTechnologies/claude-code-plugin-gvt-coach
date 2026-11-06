@@ -22,7 +22,7 @@ This skill drives the `gvt-fleet` coordinator for the coach. The coordinator is 
 
 `<ref>` is `owner/name#N` or `short#N`.
 
-Five read commands are pre-approved: `check-config`, `sync`, `status`, `ready` and `why`. Every other command asks the coach for permission. This is intended, because those commands write.
+Five read commands are pre-approved: `check-config`, `sync`, `status`, `ready` and `why`. Every other command asks the coach for permission. This is intended, because the other coordinator commands write. The triage pass also runs `cd`, `gh repo view` and `git status`, which read only but are not pre-approved.
 
 ## Command form
 
@@ -32,7 +32,7 @@ Run every command in exactly this form. The subcommand comes right after `--json
 node "${CLAUDE_PROJECT_DIR}/bin/gvt-fleet.mjs" --json <subcommand> [flags] [arguments]
 ```
 
-`${CLAUDE_PROJECT_DIR}` is the folder where the coach started Claude Code. The skill uses no other path to the coordinator and no path that is written in the skill itself.
+`${CLAUDE_PROJECT_DIR}` is the folder where the coach started Claude Code. The skill uses no other path to the coordinator and no path that is written in the skill itself. One exception: the triage pass uses the base clone of a repository, `${CLAUDE_PROJECT_DIR}/repos/<owner>/<name>`, which is the layout of the workspace's `repos/` folder.
 
 ## Rules
 
@@ -47,6 +47,7 @@ node "${CLAUDE_PROJECT_DIR}/bin/gvt-fleet.mjs" --json <subcommand> [flags] [argu
 9. Never apply a triage change to the tracker by yourself. Every change waits for the coach's approval in the triage pass.
 10. Triage one repository at a time. Finish and report it before the next.
 11. Write no file in a base clone during the triage pass.
+12. Run `gvt-dev:triage-issues` only in interactive mode.
 
 ## Preflight
 
@@ -107,9 +108,9 @@ node "${CLAUDE_PROJECT_DIR}/bin/gvt-fleet.mjs" --json ready
 
 Show each entry of `ready` with `key` and `title`. List the issues of `coach.workspaceRepo` separately, or mark them. Say that dispatching one needs the coach's explicit choice, because `dispatch` refuses it without `--allow-self`.
 
-On exit 1 (the claims database has another schema version), exit 2 or exit 64, show stderr and say that the ready list is missing.
+On exit 1 (the claims database has another schema version), exit 2 or exit 64, show stderr and say that the ready list and the untriaged summary are missing. Offer no triage pass.
 
-Then show the untriaged issues, from the `untriaged` key of the same output. An issue without the triaged label is never ready, so it is not in the ready list. Show one line per entry: `repo`, `count`, and `onlyReason` (how many of those issues the triaged label alone would make ready). Mark the entry whose `repo` is `coach.workspaceRepo`.
+Then show the untriaged issues, from the `untriaged` key of the same output. An issue without the triaged label is never ready, so it is not in the ready list. Show one line per entry: `repo`, `count`, and `onlyReason` (how many of those issues the triaged label alone would make ready). Mark the entry whose `repo` is `coach.workspaceRepo`. When `coach.workspaceRepo` is null, mark none.
 
 - The `untriaged` key is missing: the CLI is older than this skill's list. Say that the untriaged summary is not reported. Offer no triage pass. A missing key is not the same as `[]`.
 - `untriaged` is `[]`: say that no issue is untriaged. Offer no triage pass.
@@ -129,21 +130,21 @@ Then stop and wait for the coach.
 
 ## Triage pass
 
-The pass runs `gvt-dev:triage-issues` over the untriaged issues of the repositories the coach picks. It runs in this session. The reasons are in the decision record `docs/decisions/0001-run-the-triage-pass-in-the-coach-session.md` of the plugin repository.
+The pass runs `gvt-dev:triage-issues` over the untriaged issues of the repositories the coach picks. It runs in this session, because a worker session per repository needs a dispatch form that is not tied to one issue, and the coordinator has none yet.
 
-Offer the pass after the overview summary. Run nothing until the coach names the repositories. Take the issue numbers from the `keys` of the chosen `untriaged` entries.
+Offer the pass after the overview summary. Run nothing until the coach names the repositories. Each entry of `keys` is a ref `owner/name#N`. The scope of a repository is the numbers after `#` in its `keys`.
 
 Handle the chosen repositories one at a time. Do not start the next one before the current one is finished and reported. For each repository `<owner/name>`:
 
 1. Check that the base clone `${CLAUDE_PROJECT_DIR}/repos/<owner>/<name>` exists. If it does not, report that, tell the coach to run `gvt-fleet clone <owner/name>`, skip this repository, and go to the next.
 2. Run `cd` into the base clone.
-3. Run `gh repo view --json nameWithOwner --jq .nameWithOwner`. If it does not print `<owner/name>`, stop this repository, report what it printed, and go to the next. The triage tools read the repository of the current folder, so a wrong repository would receive the labels.
-4. Invoke `gvt-dev:triage-issues` with the issue numbers of that repository's `keys` as the scope. Tell it the repository root (the base clone) and that every `gh` command of the pass, the analyst subagent's included, must carry `--repo <owner/name>`. A subagent may start in another folder, so the `cd` alone is not a guard.
-5. Every change to the tracker waits for the coach's approval. Apply none by yourself.
-6. Write no file in the base clone. When `gvt-dev:triage-issues` offers to create or change a file there (for example a triage contract or `.gvt-agent.json`), decline. If triage cannot go on without that file, stop this repository. Report that it needs a triage contract change through a normal pull request. Go on with the next repository.
-7. When the repository is finished, run `git status --porcelain` in the base clone. It must print nothing. If it prints files, report them. The coordinator skips a dirty base clone, and `dispatch` refuses it.
+3. Run `gh repo view --json nameWithOwner --jq .nameWithOwner`. If it does not print `<owner/name>`, stop this repository, report what it printed, and go to step 9. The triage tools read the repository of the current folder, so a wrong repository would receive the labels.
+4. Run `git status --porcelain`. If it prints files, the base clone was dirty before the pass. Report the files, stop this repository, and go to step 9.
+5. Invoke `gvt-dev:triage-issues` in interactive mode, with the scope of this repository. Never pass `--non-interactive`, `--auto` or `--force`: those modes write files and apply changes without the coach. Tell it the repository root (the base clone) and that every `gh` command of the pass, the analyst subagent's included, must carry `--repo <owner/name>`. A later `cd` can move the session to another folder, so the `cd` alone is not a guard. Every change to the tracker waits for the coach's approval. Apply none by yourself.
+6. Write no file in the base clone. When `gvt-dev:triage-issues` offers to create or change a file there (for example a triage contract or `.gvt-agent.json`), decline. Decline its light-touch groom too: the groom does not add the triaged label, so it does not change readiness. If triage cannot go on without the file, stop this repository and report that it needs a triage contract change through a normal pull request.
+7. Run `git status --porcelain` in the base clone, also when step 6 stopped the repository. It must print nothing. If it prints files, report them. The coordinator skips a dirty base clone, and `dispatch` refuses it.
 8. Report the result for this repository: which issues the coach approved, changed or left.
-9. Run `cd "${CLAUDE_PROJECT_DIR}"`. Do this also when a step above stopped the repository.
+9. Run `cd "${CLAUDE_PROJECT_DIR}"`. Do this also when a step above stopped the repository. Then go to the next repository.
 
 After the last repository, run `sync` and then `ready` again, in the same form as in the overview and with the same exit-code handling. Report how many of the picked `keys` are now in `ready[].key`. Report the new `untriaged` counts. Then stop and wait for the coach.
 
