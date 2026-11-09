@@ -22,6 +22,6 @@
     "structureQuery": "gh issue list --state open -L 500 --json number,parent,subIssuesSummary",
     "refStateQuery": "gh api repos/{repo}/issues/{id} --jq '{number,state,state_reason,closed_at,pull_request:(.pull_request != null),sub_issues_summary}'",
     "triagedLabel": "triaged",
-    "needsInfoLabel": "needs-info"
+    "needsInfoLabel": "question"
   }
 }
