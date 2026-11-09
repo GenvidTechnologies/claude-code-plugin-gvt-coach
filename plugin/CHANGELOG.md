@@ -7,6 +7,8 @@ and follows [semantic versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-08
+
 ### Added
 
 - **Untriaged summary in the coach overview.** Step 3 of the overview now shows, for each repository, how many open issues are untriaged and how many the triaged label alone would make ready.
