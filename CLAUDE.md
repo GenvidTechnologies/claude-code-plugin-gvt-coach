@@ -47,6 +47,8 @@ The skill reads the keys in the CLI's contract table ("The coach skill contract"
 
 Observed on #6: the `wrap` result carries `branchRecord`, which the skill needs for rule 5, but the CLI's `wrap` row did not list it.
 
+An issue body says whether its change raises the contract number. It does not write the number as a literal. A literal goes stale when the CLI raises the number while the issue is open. Observed in triage on #7 and #8: both said the number "stays 1" while the skill already pinned 2.
+
 A contract bump is a breaking change for consumers:
 
 - The `[Unreleased]` section of `plugin/CHANGELOG.md` gets a `Changed` entry with a **Consumers** note that names the contract number the plugin needs.
