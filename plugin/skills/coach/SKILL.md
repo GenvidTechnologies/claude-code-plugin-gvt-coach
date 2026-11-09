@@ -174,7 +174,7 @@ Do not start another dispatch in the same turn.
 
 ## wrap `<ref>`
 
-The coordinator's `wrap` command does the whole wrap-up in one call. It proves the merge, removes the worktree and the session, deletes the issue branch, and releases the claim, in that order. Each step starts only when the step before it passed. It never discards work. A rerun reads the disk first and continues from the step that is still open, so a rerun is always safe.
+The coordinator's `wrap` command does the whole wrap-up in one call. It proves the merge, removes the worktree and the session, deletes the issue branch, and releases the claim, in that order. Each step starts only when the step before it passed. It never discards work. A rerun reads the disk first and continues from the step that is still open. A rerun is safe after any result.
 
 Before the call, tell the coach that `wrap` stops a worker session that is still running. This matters when the issue is closed but its worker still runs.
 
@@ -192,8 +192,8 @@ Results:
 
 - `wrapped` (exit 0): the wrap is done. If `nothing` is true, an earlier run had already finished it. Report "nothing left to do".
 - `refused` (exit 1): show `reason`, each entry of `problems` when present, and `hint`. The usual causes are an open closing pull request, unpushed commits on the issue branch or on another branch the worktree checked out, and no merged pull request at the tip of the issue branch. Stop. If a pull request is not merged, the coach merges it and runs the wrap again. If the work is not pushed, the coach pushes it and runs the wrap again. When the work should be dropped instead, `hint` names `worktree remove <ref> --discard` followed by `release <ref>`. Rule 6 applies: offer that path only after the coach says, in words, that the work should be dropped. The coach's wish to wrap up is not that statement. Then follow "Dropping the work" below.
-- `half-removed` (exit 1): the removal stopped half-way, because a program holds the worktree folder. Show `holders` and `hint`. Ask the coach to close those programs, then offer to run `wrap` again. When `holders` is empty, there is no program to close; say that this state often clears on a plain rerun, and offer the rerun.
-- `held` (exit 1): a program holds the folder of a removal that an earlier run left half-way. Handle it as `half-removed`.
+- `half-removed` (exit 1): the removal stopped half-way. A program may hold the worktree folder. Show `holders` and `hint`. Ask the coach to close the programs in `holders`, then offer to run `wrap` again. When `holders` is empty, there is no program to close; say that this state often clears on a plain rerun, and offer the rerun.
+- `held` (exit 1): a program may hold the folder of a removal that an earlier run left half-way. Show `holders` and `hint`. Ask the coach to close the programs in `holders`, then offer to run `wrap` again. When `holders` is empty, say that this state often clears on a plain rerun, and offer the rerun.
 - `branch-kept` (exit 1): the worktree and the session are gone, but the issue branch stayed, so the claim is still held. Show `reason`, which says why `wrap` did not delete the branch, and `hint`. The coach pushes, merges or deletes the branch, then runs `wrap` again. When the merge is proven but no remote-tracking branch holds the tip, `hint` names the pull request and the `git branch -D` command to run by hand in the base clone. The skill does not run it. The coach can also keep the branch and release the claim instead (see "Release" below).
 - `failed` (exit 1): show `reason` and `hint`. Offer to run `wrap` again. When only the release failed, the rerun retries only the release.
 
@@ -256,4 +256,4 @@ This skill was written for `coach.contract: 2`. The preflight refuses any other 
 | `worktree remove` | `status`, `problems`, `reason`, `holders`, `hint`, `pushedBranch`, `pr`, `proofs`, `branchRecord`, `nothing` |
 | `release` | `status`, `reason` |
 
-The `wrap` result carries `branchRecord`, but the workspace's contract table does not list it for `wrap` yet. The skill reads it for rule 5. When it is missing, report it as not reported, as for any other key.
+The skill reads `branchRecord` from the `wrap` result for rule 5. When it is missing, report it as not reported, as for any other key.
