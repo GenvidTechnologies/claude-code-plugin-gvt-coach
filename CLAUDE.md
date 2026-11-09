@@ -29,7 +29,7 @@ This repository is the **`gvt-fleet` plugin** for Claude Code. It ships one skil
 - **Branches:** kebab-case.
 - **Merges:** squash merge only.
 - **Tags:** `v<semver>`, annotated, and equal to the `version` in `plugin.json`.
-- **Changelog:** each new invocable skill adds an entry under `[Unreleased]` in `plugin/CHANGELOG.md` and needs a version bump at release.
+- **Changelog:** each new invocable skill adds an entry under `[Unreleased]` in `plugin/CHANGELOG.md` and needs a version bump at release. So does a contract bump (see "Coordinator contract").
 - **License:** MIT-0.
 - **No machine paths and no private names** in any file. `.github/scripts/leak-guard.sh` enforces this. Read the script for the blocked names, and do not copy them into a file.
 - **Skill names** are short nouns.
@@ -38,3 +38,17 @@ This repository is the **`gvt-fleet` plugin** for Claude Code. It ships one skil
 ## Coordinator contract
 
 The skill pins the `coach.contract` number that the gvt-fleet CLI reports. When the workspace raises that number, update the skill to match.
+
+The skill reads the keys in the CLI's contract table ("The coach skill contract" in the workspace's `docs/coordinator.md`). Sometimes the skill needs a result key that the table does not list for that command. Then:
+
+- The skill reads the key and treats a missing key as "not reported", as for any key.
+- The skill's own contract table lists the key.
+- An issue goes to the workspace repository, asking to list the key in the table and pin it in the CLI's contract test. Adding a key does not raise the contract number.
+
+Observed on #6: the `wrap` result carries `branchRecord`, which the skill needs for rule 5, but the CLI's `wrap` row did not list it.
+
+A contract bump is a breaking change for consumers:
+
+- The `[Unreleased]` section of `plugin/CHANGELOG.md` gets a `Changed` entry with a **Consumers** note that names the contract number the plugin needs.
+- The release bumps at least the minor version.
+- The plugin release ships first. The workspace moves its CLI to the new contract after the release. Until both move, the skill stops at the preflight.
