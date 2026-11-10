@@ -1,12 +1,13 @@
 ---
 name: coach
-description: Runs the coach's overview of a gvt-fleet workspace (workers that need you, wrap-up candidates, ready issues, untriaged issues per repository), offers a triage pass over the repositories the coach picks, dispatches one issue the coach names, and wraps up a finished worker. Use only in a gvt-fleet workspace, when the coach types /gvt-fleet:coach, optionally with "dispatch <ref> [prompt]" or "wrap <ref>".
+description: Runs the coach's overview of a gvt-fleet workspace (workers that need you, wrap-up candidates, Now issues, untriaged issues per repository, Next counts), offers a triage pass over the repositories the coach picks, lists or sets an issue's class when the coach asks, dispatches one issue the coach names, and wraps up a finished worker. Use only in a gvt-fleet workspace, when the coach types /gvt-fleet:coach, optionally with "dispatch <ref> [prompt]" or "wrap <ref>".
 disable-model-invocation: true
 allowed-tools:
   - Bash(node "${CLAUDE_PROJECT_DIR}/bin/gvt-fleet.mjs" --json check-config)
   - Bash(node "${CLAUDE_PROJECT_DIR}/bin/gvt-fleet.mjs" --json sync)
   - Bash(node "${CLAUDE_PROJECT_DIR}/bin/gvt-fleet.mjs" --json status)
   - Bash(node "${CLAUDE_PROJECT_DIR}/bin/gvt-fleet.mjs" --json ready)
+  - Bash(node "${CLAUDE_PROJECT_DIR}/bin/gvt-fleet.mjs" --json ready --class *)
   - Bash(node "${CLAUDE_PROJECT_DIR}/bin/gvt-fleet.mjs" --json why *)
 ---
 
@@ -22,7 +23,7 @@ This skill drives the `gvt-fleet` coordinator for the coach. The coordinator is 
 
 `<ref>` is `owner/name#N` or `short#N`.
 
-Five read commands are pre-approved: `check-config`, `sync`, `status`, `ready` and `why`. Every other command asks the coach for permission. This is intended, because the other coordinator commands write. The triage pass also runs `cd`, `gh repo view` and `git status`, which read only but are not pre-approved.
+Five read commands are pre-approved: `check-config`, `sync`, `status`, `ready` (with or without `--class`) and `why`. Every other command asks the coach for permission. This is intended, because the other coordinator commands write. `class` is one of them: it writes labels on GitHub. The triage pass also runs `cd`, `gh repo view` and `git status`, which read only but are not pre-approved.
 
 ## Command form
 
@@ -48,6 +49,7 @@ node "${CLAUDE_PROJECT_DIR}/bin/gvt-fleet.mjs" --json <subcommand> [flags] [argu
 10. Triage one repository at a time. Finish and report it before the next.
 11. Write no file in a base clone during the triage pass.
 12. Run `gvt-dev:triage-issues` only in interactive mode.
+13. Never change an issue's class by yourself. Run `class` only for the issue and the class the coach names in this conversation.
 
 ## Preflight
 
@@ -100,21 +102,29 @@ node "${CLAUDE_PROJECT_DIR}/bin/gvt-fleet.mjs" --json status
 - Exit 1 with `agents.ok` true, or no JSON on stdout: the claims database could not be used. Show stderr and stop the overview.
 - Exit 2 or 64: stop and show stderr.
 
-### 3. Show the ready issues
+### 3. Show Now, Untriaged and Next
 
 ```
 node "${CLAUDE_PROJECT_DIR}/bin/gvt-fleet.mjs" --json ready
 ```
 
-Show each entry of `ready` with `key` and `title`. List the issues of `coach.workspaceRepo` separately, or mark them. Say that dispatching one needs the coach's explicit choice, because `dispatch` refuses it without `--allow-self`.
+On exit 1 (the claims database has another schema version), exit 2 or exit 64, show stderr and say that the Now issues, the untriaged summary and the Next counts are missing. Offer no triage pass.
 
-On exit 1 (the claims database has another schema version), exit 2 or exit 64, show stderr and say that the ready list and the untriaged summary are missing. Offer no triage pass.
+The coordinator puts each open issue in one class: Now, Next or Later. Two labels on GitHub keep the class, and an issue with neither label is Later. The class is not a ready reason: `ready`, `claim` and `dispatch` ignore it. The overview shows three groups, in this order, instead of the whole `ready` list.
 
-Then show the untriaged issues, from the `untriaged` key of the same output. An issue without the triaged label is never ready, so it is not in the ready list. Show one line per entry: `repo`, `count`, and `onlyReason` (how many of those issues the triaged label alone would make ready). Mark the entry whose `repo` is `coach.workspaceRepo`. When `coach.workspaceRepo` is null, mark none.
+**Now.** Show each entry of `now[]` with `key`, `title`, and "ready" or "not ready". For an entry that is not ready, show the `code` of each entry of its `reasons`. Mark an entry whose `conflict` is true: the issue carries both class labels. `class <ref> now` or `class <ref> next` removes the other label (see "Classes"). Mark the entries whose repository (the part of `key` before `#`) is `coach.workspaceRepo`, and say that dispatching one needs the coach's explicit choice, because `dispatch` refuses it without `--allow-self`. When `now` is `[]`, say that no issue is Now.
+
+**Untriaged.** Show the untriaged issues, from the `untriaged` key of the same output. An issue without the triaged label is never ready, so it is not in the ready list. Show one line per entry: `repo`, `count`, and `onlyReason` (how many of those issues the triaged label alone would make ready). Mark the entry whose `repo` is `coach.workspaceRepo`. When `coach.workspaceRepo` is null, mark none.
 
 - The `untriaged` key is missing: the CLI is older than this skill's list. Say that the untriaged summary is not reported. Offer no triage pass. A missing key is not the same as `[]`.
 - `untriaged` is `[]`: say that no issue is untriaged. Offer no triage pass.
 - `untriaged` has entries: after the summary, offer the triage pass (see "Triage pass"). Run nothing until the coach names the repositories.
+
+**Next.** Show one line `repo: count` for each entry of `next[]`. When `next` is `[]`, say that no issue is Next.
+
+Then say how many entries `ready` has, and that the coach can ask for the list of one class (see "Classes").
+
+When the `now` key or the `next` key is missing, the CLI is older than this skill's groups. Say that the Now and Next groups are not reported. Instead of the Now and Next groups, show each entry of `ready` with `key` and `title`, as an older version of this skill did. List the issues of `coach.workspaceRepo` separately, or mark them, with the same `--allow-self` note. Show the untriaged summary as above. A missing key is not the same as `[]`.
 
 ### 4. Explain one issue, when asked
 
@@ -147,6 +157,46 @@ Handle the chosen repositories one at a time. Do not start the next one before t
 9. Run `cd "${CLAUDE_PROJECT_DIR}"`. Do this also when a step above stopped the repository. Then go to the next repository.
 
 After the last repository, run `sync` and then `ready` again, in the same form as in the overview and with the same exit-code handling. Report how many of the picked `keys` are now in `ready[].key`. Report the new `untriaged` counts. Then stop and wait for the coach.
+
+## Classes
+
+Run this section only when the coach asks. `<class>` is `now`, `next` or `later`, in lowercase.
+
+### List one class
+
+When the coach asks for the issues of one class:
+
+```
+node "${CLAUDE_PROJECT_DIR}/bin/gvt-fleet.mjs" --json ready --class <class>
+```
+
+Show each entry of `issues` with `key`, `title`, and "ready" or "not ready". Mark the entries whose repository (the part of `key` before `#`) is `coach.workspaceRepo`. The list holds the open issues of that class, ready or not.
+
+- Exit 0 and the `issues` key is missing: the class list is not reported. Say so.
+- Exit 64: a wrong argument, for example a class that is not known. Show stderr.
+- Exit 1 or 2: as for `ready` in the overview. Show stderr.
+
+### Set the class of an issue
+
+Run this only when the coach names the issue and the class (rule 13). `class` writes labels on GitHub, so it asks the coach for permission. Never pre-approve it.
+
+```
+node "${CLAUDE_PROJECT_DIR}/bin/gvt-fleet.mjs" --json class <ref> <class>
+```
+
+Report from the JSON:
+
+- `changed` (exit 0): report `previous` and `class`.
+- `noop` (exit 0): the issue already had that class. Nothing was written on GitHub.
+- `refused` (exit 1): the issue is closed. Show `reason`.
+- `failed` (exit 1): show `reason`. The cache is unchanged. The coach can run `class` again.
+- Exit 1 and stdout holds no JSON: show stderr and stop.
+- Exit 2: the configuration is invalid, or the two class labels of the repository have the same name. Show stderr and stop.
+- Exit 64: the class is not known, the ref cannot be read, or the ref is a task id. Ask the coach for another.
+
+`class` adds the new label before it removes the old one, so a run that stops half way leaves both class labels on the issue, never none. The next overview marks that issue as a conflict.
+
+After `changed`, run `ready` again in the overview form and show the Now group and the Next counts. The change shows without a `sync`.
 
 ## dispatch `<ref>` `[prompt]`
 
@@ -233,7 +283,8 @@ Every command uses the same codes. The table says what the skill does for each o
 | `check-config` | Valid. Read `coach`. | Not expected. Preflight failed. | Invalid configuration. Preflight failed. | An argument was given. Preflight failed. | Not used. |
 | `sync` | Go on. | Some repos failed. List `errors`. Go on. | Invalid config or overlay. Stop. | Wrong argument. Stop. | Rate limit. Give `stopped.resetAt`. Never read as "no issues". |
 | `status` | Complete view. | Agents list unreadable (`agents.ok` false): show the view and say liveness and lease refresh did not run. Or the claims database has another schema version: stop. | Invalid config. Stop. | Wrong argument. Stop. | Not used. |
-| `ready` | Show the list. | Claims database has another schema version. List missing. | Invalid config. Stop. | Wrong argument. Stop. | Not used. |
+| `ready` | Show the groups, or with `--class` the list. | Claims database has another schema version. Groups or list missing. | Invalid config. Stop. | Wrong argument, an unknown class included. Stop. | Not used. |
+| `class` | `changed` or `noop`. Report. | `refused` (closed issue) or `failed`. Show `reason`. If stdout holds no JSON, show stderr and stop. | Invalid config, or equal class labels. Stop. | Unknown class, bad ref or a task id. Ask for another. | Not used. |
 | `why` | Show `ready` and `reasons`. | Issue is not in the cache. Suggest `sync`. | Invalid config. Stop. | Bad ref or unknown repo. Ask for another. | Not used. |
 | `dispatch` | `created`, `noop` or an adopted live session. Report. | Refused (a refused trust path included), failed, rolled back, or an adopted session that is not live. Report `reasons`, `step`, `reason`, `rollback`. If stdout holds no JSON, show stderr and stop. | `claimAccount` not set, or invalid config. Stop. | Wrong arguments (for example a prompt that starts with `-`). Ask for another. | Not used. |
 | `release` | Released. | `none` (no claim, so already released) or the GitHub update failed. Report. Retry only after a failure. | Invalid config. Stop. | Wrong ref. Ask for another. | Not used. |
@@ -249,7 +300,8 @@ This skill was written for `coach.contract: 2`. The preflight refuses any other 
 | `check-config` | `coach.contract`, `coach.workspaceRepo` |
 | `sync` | `errors`, `stopped.reason`, `stopped.resetAt` |
 | `status` | `agents.ok`, `agents.error`, `workers[].key`, `state`, `reason`, `detail`, `session.agentsState`, `session.shortId`, `lease.state`, `issue.title`, `issue.state`, `issue.closingPrs` |
-| `ready` | `ready[].key`, `ready[].title`, `untriaged[].repo`, `untriaged[].count`, `untriaged[].keys`, `untriaged[].onlyReason` |
+| `ready` | `ready[].key`, `ready[].title`, `untriaged[].repo`, `untriaged[].count`, `untriaged[].keys`, `untriaged[].onlyReason`, `now[].key`, `now[].title`, `now[].ready`, `now[].reasons`, `now[].conflict`, `next[].repo`, `next[].count`, `issues[].key`, `issues[].title`, `issues[].ready` |
+| `class` | `status`, `class`, `previous`, `reason` |
 | `why` | `ready`, `reasons` |
 | `dispatch` | `status`, `step`, `claim`, `rollback`, `reasons`, `reason`, `shortId`, `path` |
 | `wrap` | `status`, `steps`, `problems`, `reason`, `holders`, `hint`, `pushedBranch`, `pr`, `proofs`, `otherBranches`, `nothing`, `branchRecord` |
