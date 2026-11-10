@@ -40,7 +40,7 @@ This repository is the **`gvt-fleet` plugin** for Claude Code. It ships one skil
 
 The skill pins the `coach.contract` number that the gvt-fleet CLI reports. When the workspace raises that number, update the skill to match.
 
-The skill reads the keys in the CLI's contract table (the workspace's `docs/coordinator/coach-skill-contract.md`). Sometimes the skill needs a result key that the table does not list for that command. Then:
+The skill reads the keys in the CLI's contract table (the workspace's `wiki/coordinator/coach-skill-contract.md`). Sometimes the skill needs a result key that the table does not list for that command. Then:
 
 - The skill reads the key and treats a missing key as "not reported", as for any key.
 - The skill's own contract table lists the key.
@@ -58,10 +58,10 @@ git diff origin/main...HEAD -- plugin/skills/coach/SKILL.md | grep -E '^[-+][^-+
 
 It prints 0 when no added or removed line pairs `contract` with a digit. Positive control: the same pipeline over `f841961`, the commit that raised the number (`git diff f841961~1 f841961 -- plugin/skills/coach/SKILL.md | …`), prints 4. Used on #7.
 
-Every sentence in SKILL.md about what a CLI command returns or does has a source in the workspace's command reference. `docs/coordinator.md` is its index, and each command's section is in a file under `docs/coordinator/` (for example `docs/coordinator/workers.md` for `status` and `watch`). Read these files from `main` of the workspace repository. `<workspace>` is its `owner/name`, the `origin` of the workspace checkout. The leak guard blocks the name, so this file does not write it.
+Every sentence in SKILL.md about what a CLI command returns or does has a source in the workspace's command reference. `wiki/coordinator.md` is its index, and each command's section is in a file under `wiki/coordinator/` (for example `wiki/coordinator/workers.md` for `status` and `watch`). Read these files from `main` of the workspace repository. `<workspace>` is its `owner/name`, the `origin` of the workspace checkout. The leak guard blocks the name, so this file does not write it.
 
 ```
-gh api -H "Accept: application/vnd.github.raw" "repos/<workspace>/contents/docs/coordinator/workers.md?ref=main"
+gh api -H "Accept: application/vnd.github.raw" "repos/<workspace>/contents/wiki/coordinator/workers.md?ref=main"
 ```
 
 Do not read them from a local checkout of the workspace. A checkout can be on another branch or behind `main`. Observed on #8: a local checkout still had the reference as one `docs/coordinator.md` of 944 lines, while `main` had split it into an index and ten files. The text of each section was the same, but the paths in this file and in SKILL.md no longer matched `main`. When the reference is silent, read the CLI code. When the code is silent too, leave the sentence out. No test compares SKILL.md with the CLI. Observed on #7: the code review found three sentences that said more than the reference. One had no source at all (the exit code of an older CLI for `--class`). One was true only by the CLI code (`class` removes the other label of an issue that carries both). One attached a half-way state to the wrong result.
