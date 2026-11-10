@@ -54,6 +54,15 @@ Missing the essentials → add the **`question`** label and comment exactly what
 needed. (This repo has no dedicated `needs-info` label; `question` serves that
 role — match the `needsInfoLabel` in the `bugTracker` block to it.)
 
+An acceptance row that a background worker cannot check ends with
+`(interactive)`. Examples: a row that needs an interactive Claude Code session,
+or a row that needs the user present. A worker that cannot check such a row
+reports it as not verified in the pull request and leaves its box unticked. The
+issue then closes with that row open, so the pull request names who checks it.
+Observed on #8: the row "A Monitor line starts a new turn in an interactive
+coach session" went to a background worker, and the issue closed on merge with
+the row unchecked.
+
 ## Splitting
 
 Split when one issue bundles unrelated concerns, or when a single piece of work
