@@ -50,13 +50,23 @@ Observed on #6: the `wrap` result carries `branchRecord`, which the skill needs 
 
 An issue body says whether its change raises the contract number. It does not write the number as a literal. A literal goes stale when the CLI raises the number while the issue is open. Observed in triage on #7 and #8: both said the number "stays 1" while the skill already pinned 2.
 
-An acceptance row that pledges "the contract number does not change" checks the branch diff, not the number:
+An acceptance row that pledges "the contract number does not change" checks the branch diff, not the number. It compares the contract fragments on the removed lines with those on the added lines:
 
 ```
-git diff origin/main...HEAD -- plugin/skills/coach/SKILL.md | grep -E '^[-+][^-+]' | grep -c -E 'contract[^|]{0,6}[0-9]'
+git diff origin/main...HEAD -- plugin/skills/coach/SKILL.md | grep -E '^-[^-]' | grep -o -E 'contract[^|]{0,6}[0-9]+'
+git diff origin/main...HEAD -- plugin/skills/coach/SKILL.md | grep -E '^[+][^+]' | grep -o -E 'contract[^|]{0,6}[0-9]+'
 ```
 
-It prints 0 when no added or removed line pairs `contract` with a digit. Positive control: the same pipeline over `f841961`, the commit that raised the number (`git diff f841961~1 f841961 -- plugin/skills/coach/SKILL.md | …`), prints 4. Used on #7.
+The number is unchanged when both commands print the same lines, or nothing. Controls, over one commit each (`git diff <c>~1 <c> -- plugin/skills/coach/SKILL.md | …`):
+
+| Commit | Removed lines | Added lines |
+|---|---|---|
+| `f841961`, which raised the number | `contract 1`, `contract: 1` | `contract 2`, `contract: 2` |
+| `e664c32`, a path fix on the line that holds the number | `contract: 2` | `contract: 2` |
+
+A commit that adds a new mention of the current number also prints a difference. Read the diff in that case.
+
+An earlier form of this check counted the added and removed lines that pair `contract` with a digit, and expected 0. It counts a changed line, not a changed number. Observed on #15: the path fix in `e664c32` made it print 2 while the number stayed the same.
 
 Every sentence in SKILL.md about what a CLI command returns or does has a source in the workspace's command reference. `wiki/coordinator.md` is its index, and each command's section is in a file under `wiki/coordinator/` (for example `wiki/coordinator/workers.md` for `status` and `watch`). Read these files from `main` of the workspace repository. `<workspace>` is its `owner/name`, the `origin` of the workspace checkout. The leak guard blocks the name, so this file does not write it.
 
