@@ -112,7 +112,7 @@ On exit 1 (the claims database has another schema version), exit 2 or exit 64, s
 
 The coordinator puts each open issue in one class: Now, Next or Later. Two labels on GitHub keep the class, and an issue with neither label is Later. The class is not a ready reason: `ready`, `claim` and `dispatch` ignore it. The overview shows three groups, in this order, instead of the whole `ready` list.
 
-**Now.** Show each entry of `now[]` with `key`, `title`, and "ready" or "not ready". For an entry that is not ready, show the `code` of each entry of its `reasons`. Mark an entry whose `conflict` is true: the issue carries both class labels, and the coach can fix that with `class` (see "Classes"). Mark the entries whose key is in `coach.workspaceRepo`, and say that dispatching one needs the coach's explicit choice, because `dispatch` refuses it without `--allow-self`. When `now` is `[]`, say that no issue is Now.
+**Now.** Show each entry of `now[]` with `key`, `title`, and "ready" or "not ready". For an entry that is not ready, show the `code` of each entry of its `reasons`. Mark an entry whose `conflict` is true: the issue carries both class labels. `class <ref> now` or `class <ref> next` removes the other label (see "Classes"). Mark the entries whose repository (the part of `key` before `#`) is `coach.workspaceRepo`, and say that dispatching one needs the coach's explicit choice, because `dispatch` refuses it without `--allow-self`. When `now` is `[]`, say that no issue is Now.
 
 **Untriaged.** Show the untriaged issues, from the `untriaged` key of the same output. An issue without the triaged label is never ready, so it is not in the ready list. Show one line per entry: `repo`, `count`, and `onlyReason` (how many of those issues the triaged label alone would make ready). Mark the entry whose `repo` is `coach.workspaceRepo`. When `coach.workspaceRepo` is null, mark none.
 
@@ -170,10 +170,10 @@ When the coach asks for the issues of one class:
 node "${CLAUDE_PROJECT_DIR}/bin/gvt-fleet.mjs" --json ready --class <class>
 ```
 
-Show each entry of `issues` with `key`, `title`, and "ready" or "not ready". Mark the entries whose key is in `coach.workspaceRepo`. The list holds the open issues of that class, ready or not.
+Show each entry of `issues` with `key`, `title`, and "ready" or "not ready". Mark the entries whose repository (the part of `key` before `#`) is `coach.workspaceRepo`. The list holds the open issues of that class, ready or not.
 
 - Exit 0 and the `issues` key is missing: the class list is not reported. Say so.
-- Exit 64: the class is not known, or the CLI is older and does not know `--class`. Show stderr.
+- Exit 64: a wrong argument, for example a class that is not known. Show stderr.
 - Exit 1 or 2: as for `ready` in the overview. Show stderr.
 
 ### Set the class of an issue
@@ -189,10 +189,12 @@ Report from the JSON:
 - `changed` (exit 0): report `previous` and `class`.
 - `noop` (exit 0): the issue already had that class. Nothing was written on GitHub.
 - `refused` (exit 1): the issue is closed. Show `reason`.
-- `failed` (exit 1): show `reason`. The cache is unchanged. A run that stopped half way leaves both class labels on the issue, never none. The coach can run `class` again.
+- `failed` (exit 1): show `reason`. The cache is unchanged. The coach can run `class` again.
 - Exit 1 and stdout holds no JSON: show stderr and stop.
 - Exit 2: the configuration is invalid, or the two class labels of the repository have the same name. Show stderr and stop.
 - Exit 64: the class is not known, the ref cannot be read, or the ref is a task id. Ask the coach for another.
+
+`class` adds the new label before it removes the old one, so a run that stops half way leaves both class labels on the issue, never none. The next overview marks that issue as a conflict.
 
 After `changed`, run `ready` again in the overview form and show the Now group and the Next counts. The change shows without a `sync`.
 

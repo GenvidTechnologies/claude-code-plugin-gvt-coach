@@ -10,6 +10,7 @@ and follows [semantic versioning](https://semver.org/).
 ### Added
 
 - **Class list and class change on request.** The coach can ask for the issues of one class (`ready --class <now|next|later>`, pre-approved because it only reads). The coach can also ask to move an issue to another class. The skill then runs `class <ref> <class>`, which writes labels on GitHub, so it always asks for permission. Afterwards the skill runs `ready` again and shows the change without a `sync`.
+  - **Consumers:** both need a workspace CLI that has `ready --class` and the `class` command. With an older CLI the skill shows the CLI's error.
 
 ### Changed
 
