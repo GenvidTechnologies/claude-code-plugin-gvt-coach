@@ -11,6 +11,8 @@ and follows [semantic versioning](https://semver.org/).
 
 - **Class list and class change on request.** The coach can ask for the issues of one class (`ready --class <now|next|later>`, pre-approved because it only reads). The coach can also ask to move an issue to another class. The skill then runs `class <ref> <class>`, which writes labels on GitHub, so it always asks for permission. Afterwards the skill runs `ready` again and shows the change without a `sync`.
   - **Consumers:** both need a workspace CLI that has `ready --class` and the `class` command. With an older CLI the skill shows the CLI's error.
+- **Watch on the running workers.** While a worker runs, the skill keeps one `gvt-fleet watch --minutes 25` running under the Monitor tool, so a worker that starts to wait reaches the coach as an event, with its `key`, `reason` and `detail`. The overview starts the watch, and so does a `dispatch` that exits 0. At each `watch-end` line the skill runs `status`, which extends the leases, and starts the next run from the line's `cursor`. When Monitor ends a run early, the skill shows `status` and starts a new run. The watch stops when no worker is running, or when the coach asks. `watch` is pre-approved, because it changes no lease and makes no GitHub call.
+  - **Consumers:** the watch needs a workspace CLI that has the `watch` command. With an older CLI the command exits 64 and the skill starts no watch. These are added keys, so the coach contract stays at 2.
 
 ### Changed
 
