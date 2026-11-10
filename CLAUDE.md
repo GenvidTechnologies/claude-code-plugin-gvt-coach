@@ -32,6 +32,7 @@ This repository is the **`gvt-fleet` plugin** for Claude Code. It ships one skil
 - **Changelog:** each new invocable skill adds an entry under `[Unreleased]` in `plugin/CHANGELOG.md` and needs a version bump at release. So does a contract bump (see "Coordinator contract").
 - **License:** MIT-0.
 - **No machine paths and no private names** in any file. `.github/scripts/leak-guard.sh` enforces this. Read the script for the blocked names, and do not copy them into a file.
+- **README:** `README.md` summarises what the overview and each mode show. A change to what they show also updates that summary, in the same commit. No check ties the two together. Observed on #7: the overview changed, and only the code review found the stale README sentence.
 - **Skill names** are short nouns.
 - **Decision records** go in `docs/decisions/`, numbered `NNNN-kebab-title.md`. Version 0.1.0 ships none. The first record is 0001.
 
@@ -48,6 +49,16 @@ The skill reads the keys in the CLI's contract table ("The coach skill contract"
 Observed on #6: the `wrap` result carries `branchRecord`, which the skill needs for rule 5, but the CLI's `wrap` row did not list it.
 
 An issue body says whether its change raises the contract number. It does not write the number as a literal. A literal goes stale when the CLI raises the number while the issue is open. Observed in triage on #7 and #8: both said the number "stays 1" while the skill already pinned 2.
+
+An acceptance row that pledges "the contract number does not change" checks the branch diff, not the number:
+
+```
+git diff origin/main...HEAD -- plugin/skills/coach/SKILL.md | grep -E '^[-+][^-+]' | grep -c -E 'contract[^|]{0,6}[0-9]'
+```
+
+It prints 0 when no added or removed line pairs `contract` with a digit. Positive control: the same pipeline over `f841961`, the commit that raised the number (`git diff f841961~1 f841961 -- plugin/skills/coach/SKILL.md | …`), prints 4. Used on #7.
+
+Every sentence in SKILL.md about what a CLI command returns or does has a source in the workspace's `docs/coordinator.md`. When the reference is silent, read the CLI code. When the code is silent too, leave the sentence out. No test compares SKILL.md with the CLI. Observed on #7: the code review found three sentences that said more than the reference. One had no source at all (the exit code of an older CLI for `--class`). One was true only by the CLI code (`class` removes the other label of an issue that carries both). One attached a half-way state to the wrong result.
 
 A contract bump is a breaking change for consumers:
 
