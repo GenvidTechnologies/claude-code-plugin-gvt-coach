@@ -63,6 +63,11 @@ Observed on #8: the row "A Monitor line starts a new turn in an interactive
 coach session" went to a background worker, and the issue closed on merge with
 the row unchecked.
 
+An issue names the file it changes and quotes the sentence to change. It does
+not give a line number. A line number goes stale when another change lands in
+the file while the issue is open. Observed on #15: the body cited
+`SKILL.md:296`, and one merged pull request later the sentence was at line 375.
+
 ## Splitting
 
 Split when one issue bundles unrelated concerns, or when a single piece of work
