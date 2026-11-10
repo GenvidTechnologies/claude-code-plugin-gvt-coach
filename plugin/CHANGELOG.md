@@ -7,6 +7,15 @@ and follows [semantic versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **Class list and class change on request.** The coach can ask for the issues of one class (`ready --class <now|next|later>`, pre-approved because it only reads). The coach can also ask to move an issue to another class. The skill then runs `class <ref> <class>`, which writes labels on GitHub, so it always asks for permission. Afterwards the skill runs `ready` again and shows the change without a `sync`.
+
+### Changed
+
+- **The overview shows Now, Untriaged and Next instead of the whole ready list.** Step 3 shows each Now issue (ready or not, with its reason codes, marked when it carries both class labels), the untriaged summary, and one count line for each repository with Next issues. It still says how many issues are ready.
+  - **Consumers:** the groups need a workspace CLI whose `ready --json` reports `now` and `next`. With an older CLI the overview says the groups are not reported and shows the ready list as before. These are added keys, so the coach contract stays at 2.
+
 ## [0.2.0] - 2026-11-08
 
 ### Added
