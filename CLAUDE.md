@@ -50,6 +50,8 @@ Observed on #6: the `wrap` result carries `branchRecord`, which the skill needs 
 
 An issue body says whether its change raises the contract number. It does not write the number as a literal. A literal goes stale when the CLI raises the number while the issue is open. Observed in triage on #7 and #8: both said the number "stays 1" while the skill already pinned 2.
 
+An issue that asks the skill to read a key names the results after which the skill reads it. Take that set from the command reference, which says on which results the key is present. Observed in triage on #22: the body read `checkedOutBranch` only after `wrapped`, while the reference says the key is always present on a `wrap` result, so a `branch-kept` result can also report a kept branch.
+
 An acceptance row that pledges "the contract number does not change" checks the branch diff, not the number. It compares the contract fragments on the removed lines with those on the added lines:
 
 ```
