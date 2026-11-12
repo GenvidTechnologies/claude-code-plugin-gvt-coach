@@ -34,6 +34,29 @@ ordering work, rank by recency and observable impact in discussion rather than a
 label — a triaged issue carries no priority field. (If the repo later adopts
 priority labels, switch to the structured template.)
 
+## Class
+
+Each open issue has a class: Now, Next or Later. Two places store it, and a
+triage pass sets both:
+
+- **The coordinator's class labels.** The gvt-fleet coordinator keeps the class
+  in the labels `class:now` and `class:next`. An issue with neither label is
+  Later. The coach overview reads only these labels. Only the coordinator's
+  `class` command writes them.
+- **The Class field of the `gvt-plugins` project** (organization project 1). It
+  is a single-select field with the options Now, Next and Later. The coach
+  overview does not read it.
+
+The two stores are not linked. When only one is set, they can disagree, and the
+coach overview shows the label class. Observed in the triage of #25: the brief
+asked for "the project Class", and only the project field was set. Both stores
+said Later, so nothing was lost. A Next class set that way would not have
+reached the overview.
+
+Propose a class for each triaged issue. The proposal defaults to Later. Set it
+only with the coach's approval, through the recipes "Set coordinator class" and
+"Set project Class".
+
 ## Labels
 
 - category — exactly one of `bug` / `enhancement` / `documentation` / `question`.
@@ -42,6 +65,9 @@ priority labels, switch to the structured template.)
   supplied.
 - `wontfix` — set only with explicit approval when an issue is closed as out of scope.
 - `triaged` — set **last**, by the skill, when triage is complete.
+- `class:now`, `class:next` — the coordinator's class (see Class). The category
+  recipes leave them alone, and only the coordinator's `class` command writes
+  them.
 
 The triager sets the category label. Reporters may suggest one.
 
@@ -110,6 +136,12 @@ When a recipe's set would be empty, omit its --remove-label flag.
 - Close as completed or not planned (only with approval): `gh issue close {id} --reason "{closeReason}"` — post the reason first through the Comment recipe; `{closeReason}` is `completed` or `not planned`
 - Create split issue: `gh issue create --title "{title}" --body-file {tmpfile} --label "{type}"` — the skill writes the drafted split body to `{tmpfile}` first
 - Link dependency: `gh issue comment {id} --body "Blocked by #{other}"`
+- Set coordinator class: `node bin/gvt-fleet.mjs --json class {ref} {class}`, run at the root of the gvt-fleet workspace. `{ref}` is the issue's `owner/name#{id}`, and `{class}` is `now`, `next` or `later` in lowercase. The command adds the new label before it removes the old one, creates a missing label, reads the issue back and refreshes the coordinator's cache. `later` adds no label. A result with `status` `noop` means that the issue already had the class.
+- Set project Class, in three steps:
+  1. Add the issue to the project: `gh project item-add 1 --owner GenvidTechnologies --url {url} --format json --jq .id`. The output is `{itemId}`. For an issue that is already in the project, read `{itemId}` from the `projectItems` of the issue instead; this recipe was not checked against an issue that is already in the project.
+  2. Look up the ids: `gh api graphql -f query='query{organization(login:"GenvidTechnologies"){projectV2(number:1){id field(name:"Class"){... on ProjectV2SingleSelectField{id options{id name}}}}}}'`. `{projectId}` is `projectV2.id`, `{fieldId}` is `field.id`, and `{optionId}` is the `id` of the option whose `name` is the class. Look the ids up on each run: rebuilding the options of the field gives new option ids.
+  3. Set the field: `gh project item-edit --project-id {projectId} --id {itemId} --field-id {fieldId} --single-select-option-id {optionId}`. The command prints nothing on success.
+- Read back the project Class: `gh api graphql -f query='query{repository(owner:"GenvidTechnologies",name:"claude-code-plugin-gvt-fleet"){issue(number:{id}){projectItems(first:5){nodes{project{title} fieldValueByName(name:"Class"){... on ProjectV2ItemFieldSingleSelectValue{name}}}}}}}'`
 - Stamp triaged: `gh issue edit {id} --add-label {triagedLabel}`
 
 Read the labels back after this edit: confirm the issue now carries exactly the intended labels before it is stamped triaged (use the tracker's read-one query, or the native issue view).
