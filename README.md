@@ -2,7 +2,7 @@
 
 The **`gvt-fleet` plugin** for Claude Code. It provides one skill, `/gvt-fleet:coach`, the coach's entry point for the gvt-fleet multi-repo coordinator.
 
-The skill reads issues from the managed repositories through the coordinator. It shows the workers that need the coach, the Now issues, the untriaged issues of each repository, and how many Next issues each repository has. While workers run, it keeps a watch on them, so a worker that starts to wait reaches the coach as an event. It offers a triage pass over the repositories the coach picks. It lists the issues of one class, or moves an issue to another class, when the coach asks. It dispatches an issue to a worker on request. It wraps up a worker that has finished.
+The skill reads issues from the managed repositories through the coordinator. It shows the workers that need the coach, the Now issues, the untriaged issues of each repository, and how many Next issues each repository has. While workers run, it keeps a watch on them, so a worker that starts to wait reaches the coach as an event. It offers a triage pass over the repositories the coach picks. It lists the issues of one class, or moves an issue to another class, when the coach asks. It dispatches an issue to a worker on request, or starts a task worker, a worker with no issue, in a repository the coach names. The overview lists task workers with the issue workers. It wraps up a worker or a task that has finished; a task needs no merged pull request.
 
 The plugin is distributed through the [`claude-code-gvt-marketplace`](https://github.com/GenvidTechnologies/claude-code-gvt-marketplace) catalog (marketplace name `gvt-plugins`).
 
