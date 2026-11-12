@@ -7,6 +7,8 @@ and follows [semantic versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-12
+
 ### Added
 
 - **Class list and class change on request.** The coach can ask for the issues of one class (`ready --class <now|next|later>`, pre-approved because it only reads). The coach can also ask to move an issue to another class. The skill then runs `class <ref> <class>`, which writes labels on GitHub, so it always asks for permission. Afterwards the skill runs `ready` again and shows the change without a `sync`.
