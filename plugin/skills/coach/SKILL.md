@@ -1,6 +1,6 @@
 ---
 name: coach
-description: Runs the coach's overview of a gvt-fleet workspace (workers that need you, wrap-up candidates, Now issues, untriaged issues per repository, Next counts), keeps a watch on the running workers so that a worker that starts to wait reaches the coach as an event, offers a triage pass over the repositories the coach picks, lists or sets an issue's class when the coach asks, dispatches one issue the coach names, and wraps up a finished worker. Use only in a gvt-fleet workspace, when the coach types /gvt-fleet:coach, optionally with "dispatch <ref> [prompt]" or "wrap <ref>".
+description: Runs the coach's overview of a gvt-fleet workspace (workers that need you, wrap-up candidates, Now issues, untriaged issues per repository, Next counts), keeps a watch on the running workers so that a worker that starts to wait reaches the coach as an event, offers a triage pass over the repositories the coach picks, lists or sets an issue's class when the coach asks, dispatches one issue the coach names, starts a task worker with no issue in a repository the coach names, and wraps up a finished worker or task. Use only in a gvt-fleet workspace, when the coach types /gvt-fleet:coach, optionally with "dispatch <ref> [prompt]", "task <repo> <slug> [prompt]" or "wrap <ref | task id>".
 disable-model-invocation: true
 allowed-tools:
   - Bash(node "${CLAUDE_PROJECT_DIR}/bin/gvt-fleet.mjs" --json check-config)
@@ -20,9 +20,10 @@ This skill drives the `gvt-fleet` coordinator for the coach. The coordinator is 
 
 - No arguments: the overview.
 - `dispatch <ref> [prompt]`: start one issue.
-- `wrap <ref>`: remove a finished worker and release its claim.
+- `task <repo> <slug> [prompt]`: start one task worker, a worker with no issue.
+- `wrap <ref | task id>`: remove a finished worker and release its claim.
 
-`<ref>` is `owner/name#N` or `short#N`.
+`<ref>` is `owner/name#N` or `short#N`. `<repo>` is `owner/name` or the short name of a managed repository. A task id is `owner/name@<slug>.<YYYYMMDD>.<n>` or `short@<slug>.<YYYYMMDD>.<n>`. The coordinator makes it when the task starts.
 
 Six read commands are pre-approved: `check-config`, `sync`, `status`, `ready` (with or without `--class`), `why` and `watch`. `watch` changes no lease and makes no GitHub call. The skill runs `watch` under the Monitor tool. The pre-approval is a Bash rule; if the session still asks before Monitor starts the command, the coach approves it. Every other command asks the coach for permission. This is intended, because the other coordinator commands write. `class` is one of them: it writes labels on GitHub. The triage pass also runs `cd`, `gh repo view` and `git status`, which read only but are not pre-approved.
 
@@ -38,8 +39,8 @@ node "${CLAUDE_PROJECT_DIR}/bin/gvt-fleet.mjs" --json <subcommand> [flags] [argu
 
 ## Rules
 
-1. Never pick an issue and dispatch it by yourself. Dispatch only the issue the coach names in this conversation.
-2. Run one dispatch at a time. Do not start a second `dispatch` before the first one has returned and you have reported it.
+1. Never pick an issue and dispatch it by yourself. Dispatch only the issue the coach names in this conversation. Never start a task by yourself either. Start one only for the repository and slug the coach names in this conversation.
+2. Run one dispatch at a time. Do not start a second `dispatch` or `dispatch --task` before the first one has returned and you have reported it.
 3. Never run `claude stop` or `claude rm`. The coordinator stops and removes worker sessions. The skill never stops or removes the coach's own session, or any other session, by hand.
 4. Read only the `--json` output on stdout. Never parse the human-readable lines. Use stderr only as text to show to the coach.
 5. Never commit. When `config/branches.json` changed, tell the coach to commit it. Commit only if the coach asks.
@@ -72,7 +73,7 @@ Stop at once, and run no other command, when any of these is true. Give the coac
 
 Keep `coach.workspaceRepo` (`owner/name`) for the later steps.
 
-When `coach.workspaceRepo` is null, the workspace repository is not known (no readable GitHub `origin` remote). Do not stop. Go on with the overview and say that the skill cannot mark the workspace's own issues. In `dispatch`, a dispatch into the workspace's own repository cannot be detected, so ask the coach for explicit confirmation first (see `dispatch`).
+When `coach.workspaceRepo` is null, the workspace repository is not known (no readable GitHub `origin` remote). Do not stop. Go on with the overview and say that the skill cannot mark the workspace's own issues. In `dispatch` and `task`, a dispatch into the workspace's own repository cannot be detected, so ask the coach for explicit confirmation first (see `dispatch`).
 
 ## Overview (no arguments)
 
@@ -95,11 +96,13 @@ node "${CLAUDE_PROJECT_DIR}/bin/gvt-fleet.mjs" --json sync
 node "${CLAUDE_PROJECT_DIR}/bin/gvt-fleet.mjs" --json status
 ```
 
-- Keep the order of `workers`. `status` sorts `needs-you`, then `rate-limited`, then the rest.
-- For each worker with `state` `needs-you`, show `key`, `reason` and `detail` (the worker's last message or question). The coach can answer without attaching. Show `session.shortId` so that the coach can attach.
+- The rows are the entries of `workers` (issue workers) and of `tasks` (task workers). Keep the order of each array. `status` sorts each one `needs-you`, then `rate-limited`, then the rest. Show the rows of both arrays in the groups below. Within a group, show the `workers` rows first, then the `tasks` rows.
+- Mark every `tasks` row as a task. Its `key` is the task id, and it stands in place of an issue title: a task has no issue.
+- When the `tasks` key is missing, the CLI does not report task workers. Say that task workers are not reported, and show `workers` alone. A missing key is not the same as `[]`.
+- For each row with `state` `needs-you`, show `key`, `reason` and `detail` (the worker's last message or question). The coach can answer without attaching. Show `session.shortId` so that the coach can attach.
 - Show `rate-limited` rows next, then the others, with `key`, `state` and `reason`.
-- Wrap-up candidates are the rows where `session.agentsState` is `done`, `failed` or `stopped`, or where `issue.state` is `closed`. Show them in their own list. Beside each, show `issue.title` and every entry of `issue.closingPrs` (`number`, `state`, `headRefName`). `issue` is null when the issue is not in the cache; say so and suggest `sync`.
-- A candidate is only a candidate. The merge is proved at wrap-up, not here.
+- Wrap-up candidates are the rows where `session.agentsState` is `done`, `failed` or `stopped`, and the `workers` rows where `issue.state` is `closed`. Show them in their own list. Beside each `workers` candidate, show `issue.title` and every entry of `issue.closingPrs` (`number`, `state`, `headRefName`). `issue` is null when the issue is not in the cache; say so and suggest `sync`. Beside each `tasks` candidate, show its task id and say that it is a task. A task needs no merged pull request to be wrapped.
+- A candidate is only a candidate. The merge, or for a task the safety check, is proved at wrap-up, not here.
 - Exit 1 with `agents.ok` false: still show the view. Say that liveness and lease refresh did not run, and show `agents.error`. The rows have `session` null.
 - Exit 1 with `agents.ok` true, or no JSON on stdout: the claims database could not be used. Show stderr and stop the overview.
 - Exit 2 or 64: stop and show stderr.
@@ -146,7 +149,7 @@ Show `ready` and each entry of `reasons` (`code`, `detail`). Exit 0 is a valid a
 
 ## Triage pass
 
-The pass runs `gvt-dev:triage-issues` over the untriaged issues of the repositories the coach picks. It runs in this session, because a worker session per repository needs a dispatch form that is not tied to one issue, and the coordinator has none yet.
+The pass runs `gvt-dev:triage-issues` over the untriaged issues of the repositories the coach picks. It runs in this session, as decision record 0001 of this plugin records. The coach can instead start a task worker for one repository with the `task` mode and a prompt that asks for the triage. The skill offers this pass, not the task, unless the coach asks for the task.
 
 Offer the pass after the overview summary. Run nothing until the coach names the repositories. Each entry of `keys` is a ref `owner/name#N`. The scope of a repository is the numbers after `#` in its `keys`.
 
@@ -298,16 +301,48 @@ After an exit 0 (`created`, `noop` or an adopted live session), a worker is runn
 
 Do not start another dispatch in the same turn.
 
-## wrap `<ref>`
+## task `<repo>` `<slug>` `[prompt]`
+
+Run this only when the coach has named the repository and the slug (rule 1). A task worker is a worker in the base clone of a managed repository with no issue: maintenance, a query, an investigation, or a triage pass over one repository. It has its own worktree and branch, so the worker can commit, push and open a pull request. The coordinator makes no GitHub write for a task: no label and no assignee. The lease lives only in the workspace's claims database.
+
+1. Check `<slug>`. When the coach gave none, ask for one. Do not make one up. It has lowercase letters, digits and single hyphens, and at most 24 characters. The coordinator allows fewer for a repository with a long short name, and its usage error (exit 64) names the maximum. The slug names the task: one task with the same repository and slug can be active at a time.
+2. The workspace's own repository: apply step 1 of `dispatch`, with `<repo>` in place of the repository of `<ref>`. Only with a clear yes, add `--allow-self` right after `--task`.
+3. Check the prompt as in step 2 of `dispatch`, and pass it as in step 3. The coordinator appends a rule to every task prompt: the worker must not write to the issue tracker unless the coach approves that one write. With no prompt, the coordinator uses `Task <slug> in <owner/name> (<task id>).` followed by that rule. Tell the coach that the worker will ask before each tracker write, and that the coordinator cannot enforce the rule.
+4. Run:
+```
+node "${CLAUDE_PROJECT_DIR}/bin/gvt-fleet.mjs" --json dispatch --task [--allow-self] <repo> <slug> ['prompt']
+```
+
+Report from the JSON: `status` and `key`. `key` is the task id once the coordinator has made it. A refusal made before that (`step` is `self-repo`, `default-branch`, `base-clone`, `task-active` or `task-id`) reports `owner/name@<slug>` in `key` instead. If the command exits 1 and stdout holds no JSON, show stderr and stop.
+
+- `created`: report the task id (`key`), `path` and `shortId`. The coach uses the task id for `wrap`.
+- `noop`: the task is already held with a live session. Nothing was started.
+- `adopted`: a session already existed, and the lease is kept. Exit 0 means the session is live. Exit 1 means the adopted session is not live (`done`, `failed` or `stopped`). Offer to wrap it with `wrap <task id>` (see `wrap`).
+- A refusal or failure: show `step`, `reason`, `claim` and `rollback`.
+  - `task-active`: another task with the same repository and slug is active. `reason` names its task id. The coach wraps or releases that task first, or picks another slug.
+  - `self-repo`: the repository is the workspace's own, and `--allow-self` was not given. Go back to step 2.
+  - `base-clone` or `default-branch`: show `reason`. The coach fixes the base clone, or runs the overview again so that `sync` learns the default branch.
+- A rolled-back run releases the task lease with no GitHub call. Report `rollback`.
+- A kept lease after a lost session: the coordinator names a follow-up. Report it. For a task, `worktree create <task id>` adopts the session; a second `task` with the same slug would make a new task id. `worktree create` is not part of this skill, so the coach runs it outside the skill. The coach can also wrap the task (see `wrap`) or release it (see "Release").
+
+On exit 2 (invalid configuration) or exit 64 (a usage error: a missing or bad slug, a slug that is too long, an unknown repository, or a prompt that starts with `-`), show stderr and stop.
+
+After an exit 0 (`created`, `noop` or an adopted live session), a worker is running. Start the watch unless one is already running in this session (see "Watch").
+
+Do not start another dispatch in the same turn.
+
+## wrap `<ref | task id>`
 
 The coordinator's `wrap` command does the whole wrap-up in one call. It proves the merge, removes the worktree and the session, deletes the issue branch, and releases the claim, in that order. Each step starts only when the step before it passed. It never discards work. A rerun reads the disk first and continues from the step that is still open. A rerun is safe after any result.
 
-Before the call, tell the coach that `wrap` stops a worker session that is still running. This matters when the issue is closed but its worker still runs.
+Before the call, tell the coach that `wrap` stops a worker session that is still running. This matters when the issue is closed but its worker still runs, and for a task, which has no issue to close.
+
+`wrap` also takes a task id. A task may have no pull request, so `wrap` needs no merge proof for it: `steps.proof` is `not-required` on every outcome. The safety checks stay, and `wrap` never discards. A task that wrote nothing is removed with its empty branch. A task that committed is wrapped when every commit is on a remote branch, or at the head of a merged pull request; the remote branch and any pull request stay. A task with unpushed commits or uncommitted changes is `refused`. `wrap` releases a task lease with no GitHub call and writes nothing to `config/branches.json`.
 
 Run:
 
 ```
-node "${CLAUDE_PROJECT_DIR}/bin/gvt-fleet.mjs" --json wrap <ref>
+node "${CLAUDE_PROJECT_DIR}/bin/gvt-fleet.mjs" --json wrap <ref | task id>
 ```
 
 Always show `steps` (`proof`, `worktree`, `branch`, `claim`): it tells the coach how far the wrap got. Show `pushedBranch` and `pr` when they are not null, and each entry of `proofs` (`branch`, `pr`). Show each entry of `otherBranches` (`branch`, `tip`): these are pushed branches that the worktree checked out besides the issue branch. `wrap` does not delete them. Say so, and say that the coach decides what happens to them.
@@ -316,20 +351,20 @@ The hint: `hint` is the coordinator's next command for every status except `wrap
 
 Results:
 
-- `wrapped` (exit 0): the wrap is done. If `nothing` is true, an earlier run had already finished it. Report "nothing left to do".
-- `refused` (exit 1): show `reason`, each entry of `problems` when present, and `hint`. The usual causes are an open closing pull request, unpushed commits on the issue branch or on another branch the worktree checked out, and no merged pull request at the tip of the issue branch. Stop. If a pull request is not merged, the coach merges it and runs the wrap again. If the work is not pushed, the coach pushes it and runs the wrap again. When the work should be dropped instead, `hint` names `worktree remove <ref> --discard` followed by `release <ref>`. Rule 6 applies: offer that path only after the coach says, in words, that the work should be dropped. The coach's wish to wrap up is not that statement. Then follow "Dropping the work" below.
+- `wrapped` (exit 0): the wrap is done. If `nothing` is true, an earlier run had already finished it. Report "nothing left to do". For a task that pushed a branch, say that the remote branch and any pull request stay, and that the branch shows in `branches --unknown` after a `sync`, where the coach decides it.
+- `refused` (exit 1): show `reason`, each entry of `problems` when present, and `hint`. For a task, the usual causes are unpushed commits or uncommitted changes; a task never needs a merged pull request. For an issue, the usual causes are an open closing pull request, unpushed commits on the issue branch or on another branch the worktree checked out, and no merged pull request at the tip of the issue branch. Stop. If a pull request is not merged, the coach merges it and runs the wrap again. If the work is not pushed, the coach pushes it and runs the wrap again. When the work should be dropped instead, `hint` names `worktree remove <ref> --discard` followed by `release <ref>`. Rule 6 applies: offer that path only after the coach says, in words, that the work should be dropped. The coach's wish to wrap up is not that statement. Then follow "Dropping the work" below.
 - `half-removed` (exit 1): the removal stopped half-way. A program may hold the worktree folder. Show `holders` and `hint`. Ask the coach to close the programs in `holders`, then offer to run `wrap` again. When `holders` is empty, there is no program to close; say that this state often clears on a plain rerun, and offer the rerun.
 - `held` (exit 1): a program may hold the folder of a removal that an earlier run left half-way. Show `holders` and `hint`. Ask the coach to close the programs in `holders`, then offer to run `wrap` again. When `holders` is empty, say that this state often clears on a plain rerun, and offer the rerun.
-- `branch-kept` (exit 1): the worktree and the session are gone, but the issue branch stayed, so the claim is still held. Show `reason`, which says why `wrap` did not delete the branch, and `hint`. The coach pushes, merges or deletes the branch, then runs `wrap` again. When the merge is proven but no remote-tracking branch holds the tip, `hint` names the pull request and the `git branch -D` command to run by hand in the base clone. The skill does not run it. The coach can also keep the branch and release the claim instead (see "Release" below).
+- `branch-kept` (exit 1): the worktree and the session are gone, but the issue branch (for a task, the task branch) stayed, so the claim is still held. Show `reason`, which says why `wrap` did not delete the branch, and `hint`. The coach pushes, merges or deletes the branch, then runs `wrap` again. When the merge is proven but no remote-tracking branch holds the tip, `hint` names the pull request and the `git branch -D` command to run by hand in the base clone. The skill does not run it. The coach can also keep the branch and release the claim instead (see "Release" below).
 - `failed` (exit 1): show `reason` and `hint`. Offer to run `wrap` again. When only the release failed, the rerun retries only the release.
 
-After every result, read `branchRecord` when it is present. If `recorded` or `dropped` is not null, say that `config/branches.json` changed and that the coach should commit it. Do not commit it (rule 5). Show `branchRecord.warning` when it is present. When `branchRecord` is missing, the record is not reported: show stderr, which names `config/branches.json` when the file changed.
+After every result, read `branchRecord` when it is present. If `recorded` or `dropped` is not null, say that `config/branches.json` changed and that the coach should commit it. Do not commit it (rule 5). Show `branchRecord.warning` when it is present. When `branchRecord` is missing, the record is not reported: show stderr, which names `config/branches.json` when the file changed. For a task, `branchRecord` is always absent, because a task writes nothing to `config/branches.json`; say nothing about the file.
 
 After `wrapped`, when a watch is running, check whether to stop it (see "Stop the watch").
 
 ### Dropping the work
 
-Run this only after the coach has said, in words, that the work should be dropped. Run the two commands in order:
+Run this only after the coach has said, in words, that the work should be dropped. For a task, `<ref>` is the task id. Run the two commands in order:
 
 ```
 node "${CLAUDE_PROJECT_DIR}/bin/gvt-fleet.mjs" --json worktree remove --discard <ref>
@@ -350,7 +385,8 @@ node "${CLAUDE_PROJECT_DIR}/bin/gvt-fleet.mjs" --json release <ref>
 
 - `released`: the wrap is done. When a watch is running, check whether to stop it (see "Stop the watch").
 - `none` (exit 1): the claim is already gone. Report "already released". Do not retry.
-- Another failure (exit 1): report `reason`. Then run `status` and report the `lease.state` of that worker from it. Say that the coach can run `release` again. The coordinator's `expire` command also retries a release. It is not part of this skill, so the coach runs it outside the skill.
+- For a task id, the lease goes straight to `released`, with no GitHub call.
+- Another failure (exit 1): report `reason`. Then run `status` and report the `lease.state` of that worker from it (from `tasks` for a task id). Say that the coach can run `release` again. The coordinator's `expire` command also retries a release. It is not part of this skill, so the coach runs it outside the skill.
 
 ## Exit codes
 
@@ -365,6 +401,7 @@ Every command uses the same codes. The table says what the skill does for each o
 | `class` | `changed` or `noop`. Report. | `refused` (closed issue) or `failed`. Show `reason`. If stdout holds no JSON, show stderr and stop. | Invalid config, or equal class labels. Stop. | Unknown class, bad ref or a task id. Ask for another. | Not used. |
 | `why` | Show `ready` and `reasons`. | Issue is not in the cache. Suggest `sync`. | Invalid config. Stop. | Bad ref or unknown repo. Ask for another. | Not used. |
 | `dispatch` | `created`, `noop` or an adopted live session. Report. | Refused (a refused trust path included), failed, rolled back, or an adopted session that is not live. Report `reasons`, `step`, `reason`, `rollback`. If stdout holds no JSON, show stderr and stop. | `claimAccount` not set, or invalid config. Stop. | Wrong arguments (for example a prompt that starts with `-`). Ask for another. | Not used. |
+| `dispatch --task` | `created`, `noop` or an adopted live session. Report. | Refused (`task-active` included), failed, rolled back, or an adopted session that is not live. Report `step`, `reason`, `rollback`. If stdout holds no JSON, show stderr and stop. | Invalid config. Stop. | Usage error: a missing or bad slug, a slug that is too long, an unknown repository, or a prompt that starts with `-`. Ask for another. | Not used. |
 | `release` | Released. | `none` (no claim, so already released) or the GitHub update failed. Report. Retry only after a failure. | Invalid config. Stop. | Wrong ref. Ask for another. | Not used. |
 | `wrap` | `wrapped`. Report. | `refused`, `half-removed`, `held`, `branch-kept` or `failed`. Follow the `wrap` results. | Invalid config. Stop. | Wrong arguments. Stop. | Not used. |
 | `worktree remove` | `removed`. Go on. | `refused`, `half-removed`, `branch-kept` or `failed`. Report and stop. | Invalid config. Stop. | Wrong arguments. Stop. | Not used. |
@@ -378,14 +415,16 @@ This skill was written for `coach.contract: 2`. The preflight refuses any other 
 |---|---|
 | `check-config` | `coach.contract`, `coach.workspaceRepo` |
 | `sync` | `errors`, `stopped.reason`, `stopped.resetAt` |
-| `status` | `agents.ok`, `agents.error`, `workers[].key`, `state`, `reason`, `detail`, `session.agentsState`, `session.shortId`, `lease.state`, `issue.title`, `issue.state`, `issue.closingPrs`, `tasks[].key`, `tasks[].detail`, `tasks[].session.agentsState`, `tasks[].session.shortId` |
+| `status` | `agents.ok`, `agents.error`, `workers[].key`, `state`, `reason`, `detail`, `session.agentsState`, `session.shortId`, `lease.state`, `issue.title`, `issue.state`, `issue.closingPrs`, `tasks[].key`, `tasks[].state`, `tasks[].reason`, `tasks[].detail`, `tasks[].lease.state`, `tasks[].session.agentsState`, `tasks[].session.shortId` |
 | `watch` | `event`, `key`, `reason`, `detail`, `since`, `cursor`, `polls`, `agentsErrors` |
 | `ready` | `ready[].key`, `ready[].title`, `untriaged[].repo`, `untriaged[].count`, `untriaged[].keys`, `untriaged[].onlyReason`, `now[].key`, `now[].title`, `now[].ready`, `now[].reasons`, `now[].conflict`, `next[].repo`, `next[].count`, `issues[].key`, `issues[].title`, `issues[].ready` |
 | `class` | `status`, `class`, `previous`, `reason` |
 | `why` | `ready`, `reasons` |
-| `dispatch` | `status`, `step`, `claim`, `rollback`, `reasons`, `reason`, `shortId`, `path` |
+| `dispatch` | `status`, `key`, `step`, `claim`, `rollback`, `reasons`, `reason`, `shortId`, `path` |
 | `wrap` | `status`, `steps`, `problems`, `reason`, `holders`, `hint`, `pushedBranch`, `pr`, `proofs`, `otherBranches`, `nothing`, `branchRecord` |
 | `worktree remove` | `status`, `problems`, `reason`, `holders`, `hint`, `pushedBranch`, `pr`, `proofs`, `branchRecord`, `nothing` |
 | `release` | `status`, `reason` |
 
-The skill reads `branchRecord` from the `wrap` result for rule 5. When it is missing, report it as not reported, as for any other key.
+The skill reads `branchRecord` from the `wrap` result for rule 5. When it is missing, report it as not reported, as for any other key. For a task it is always absent.
+
+The `dispatch` row covers both forms. On a `dispatch --task` run, `key` is the task id once the coordinator has made it, or `owner/name@<slug>` on a refusal made before that. On a `wrap` run for a task id, `steps.proof` is `not-required`. These are added keys and values, so the contract number stays the same.
