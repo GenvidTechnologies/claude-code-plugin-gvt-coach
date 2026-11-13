@@ -25,7 +25,7 @@ This skill drives the `gvt-fleet` coordinator for the coach. The coordinator is 
 
 `<ref>` is `owner/name#N` or `short#N`. `<repo>` is `owner/name` or the short name of a managed repository. A task id is `owner/name@<slug>.<YYYYMMDD>.<n>` or `short@<slug>.<YYYYMMDD>.<n>`. The coordinator makes it when the task starts.
 
-Six read commands are pre-approved: `check-config`, `sync`, `status`, `ready` (with or without `--class`), `why` and `watch`. `watch` changes no lease and makes no GitHub call. The skill runs `watch` under the Monitor tool. The pre-approval is a Bash rule; if the session still asks before Monitor starts the command, the coach approves it. Every other command asks the coach for permission. This is intended, because the other coordinator commands write. `class` is one of them: it writes labels on GitHub. The triage pass also runs `cd`, `gh repo view` and `git status`, which read only but are not pre-approved.
+Six read commands are pre-approved: `check-config`, `sync`, `status`, `ready` (with or without `--class`), `why` and `watch`. `watch` changes no lease and makes no GitHub call. The skill runs `watch` under the Monitor tool. The pre-approval is a Bash rule; if the session still asks before Monitor starts the command, the coach approves it. Every other command asks the coach for permission. This is intended, because the other coordinator commands write. `class` is one of them: it writes to the repository's GitHub project. The triage pass also runs `cd`, `gh repo view` and `git status`, which read only but are not pre-approved.
 
 ## Command form
 
@@ -115,9 +115,9 @@ node "${CLAUDE_PROJECT_DIR}/bin/gvt-fleet.mjs" --json ready
 
 On exit 1 (the claims database has another schema version), exit 2 or exit 64, show stderr and say that the Now issues, the untriaged summary and the Next counts are missing. Offer no triage pass.
 
-The coordinator puts each open issue in one class: Now, Next or Later. Two labels on GitHub keep the class, and an issue with neither label is Later. The class is not a ready reason: `ready`, `claim` and `dispatch` ignore it. The overview shows three groups, in this order, instead of the whole `ready` list.
+The coordinator puts each open issue in one class: Now, Next or Later. The class comes from the Iteration field of the repository's GitHub project. An issue whose item is in the current iteration is Now, and one in the first iteration that starts after today is Next. Every other issue is Later: an item in another iteration or with no iteration, an issue that is not in the project, and every issue of a repository with no project. The class is not a ready reason: `ready`, `claim` and `dispatch` ignore it. The overview shows three groups, in this order, instead of the whole `ready` list.
 
-**Now.** Show each entry of `now[]` with `key`, `title`, and "ready" or "not ready". For an entry that is not ready, show the `code` of each entry of its `reasons`. Mark an entry whose `conflict` is true: the issue carries both class labels. `class <ref> now` or `class <ref> next` removes the other label (see "Classes"). Mark the entries whose repository (the part of `key` before `#`) is `coach.workspaceRepo`, and say that dispatching one needs the coach's explicit choice, because `dispatch` refuses it without `--allow-self`. When `now` is `[]`, say that no issue is Now.
+**Now.** Show each entry of `now[]` with `key`, `title`, and "ready" or "not ready". For an entry that is not ready, show the `code` of each entry of its `reasons`. Mark the entries whose repository (the part of `key` before `#`) is `coach.workspaceRepo`, and say that dispatching one needs the coach's explicit choice, because `dispatch` refuses it without `--allow-self`. When `now` is `[]`, say that no issue is Now.
 
 **Untriaged.** Show the untriaged issues, from the `untriaged` key of the same output. An issue without the triaged label is never ready, so it is not in the ready list. Show one line per entry: `repo`, `count`, and `onlyReason` (how many of those issues the triaged label alone would make ready). Mark the entry whose `repo` is `coach.workspaceRepo`. When `coach.workspaceRepo` is null, mark none.
 
@@ -187,7 +187,7 @@ Show each entry of `issues` with `key`, `title`, and "ready" or "not ready". Mar
 
 ### Set the class of an issue
 
-Run this only when the coach names the issue and the class (rule 13). `class` writes labels on GitHub, so it asks the coach for permission. Never pre-approve it.
+Run this only when the coach names the issue and the class (rule 13). `class` writes to the repository's GitHub project, so it asks the coach for permission. Never pre-approve it.
 
 ```
 node "${CLAUDE_PROJECT_DIR}/bin/gvt-fleet.mjs" --json class <ref> <class>
@@ -197,15 +197,15 @@ Report from the JSON:
 
 - `changed` (exit 0): report `previous` and `class`.
 - `noop` (exit 0): the issue already had that class. Nothing was written on GitHub.
-- `refused` (exit 1): the issue is closed. Show `reason`.
-- `failed` (exit 1): show `reason`. The cache is unchanged. The coach can run `class` again.
+- `refused` (exit 1): the issue is closed, the project has no Iteration field, or the class is `now` or `next` and the project has no current or no next iteration. Show `reason`.
+- `failed` (exit 1): a GitHub error, or a readback that disagrees. Show `reason`. The cache is unchanged. The coach can run `class` again.
 - Exit 1 and stdout holds no JSON: show stderr and stop.
-- Exit 2: the configuration is invalid, or the two class labels of the repository have the same name. Show stderr and stop.
+- Exit 2: the configuration is invalid, or the repository has no `project` in the configuration. Show stderr and stop.
 - Exit 64: the class is not known, the ref cannot be read, or the ref is a task id. Ask the coach for another.
 
-`class` adds the new label before it removes the old one, so a run that stops half way leaves both class labels on the issue, never none. The next overview marks that issue as a conflict.
+For `now` or `next`, `class` puts the issue's project item in the current or the next iteration, and adds the issue to the project when it is not in it. For `later`, it clears the item's value. `later` does not add an issue to the project. An item in a planned or completed iteration is Later already, so `later` leaves it there and reports `noop`. `class` reads the value back after the write.
 
-After `changed`, run `ready` again in the overview form and show the Now group and the Next counts. The change shows without a `sync`.
+After `changed`, run `ready` again in the overview form and show the Now group and the Next counts. The coordinator writes the new value to its cache only when the readback agrees and `sync` has read the project. Only then does the change show without a `sync`. When it does not show, say that the next overview's `sync` reads it.
 
 ## Watch
 
@@ -398,7 +398,7 @@ Every command uses the same codes. The table says what the skill does for each o
 | `sync` | Go on. | Some repos failed. List `errors`. Go on. | Invalid config or overlay. Stop. | Wrong argument. Stop. | Rate limit. Give `stopped.resetAt`. Never read as "no issues". |
 | `status` | Complete view. | Agents list unreadable (`agents.ok` false): show the view and say liveness and lease refresh did not run. Or the claims database has another schema version: stop. | Invalid config. Stop. | Wrong argument. Stop. | Not used. |
 | `ready` | Show the groups, or with `--class` the list. | Claims database has another schema version. Groups or list missing. | Invalid config. Stop. | Wrong argument, an unknown class included. Stop. | Not used. |
-| `class` | `changed` or `noop`. Report. | `refused` (closed issue) or `failed`. Show `reason`. If stdout holds no JSON, show stderr and stop. | Invalid config, or equal class labels. Stop. | Unknown class, bad ref or a task id. Ask for another. | Not used. |
+| `class` | `changed` or `noop`. Report. | `refused` (a closed issue, a project with no Iteration field, or `now` or `next` when the project has no current or no next iteration) or `failed`. Show `reason`. If stdout holds no JSON, show stderr and stop. | Invalid config, or a repository with no `project`. Stop. | Unknown class, bad ref or a task id. Ask for another. | Not used. |
 | `why` | Show `ready` and `reasons`. | Issue is not in the cache. Suggest `sync`. | Invalid config. Stop. | Bad ref or unknown repo. Ask for another. | Not used. |
 | `dispatch` | `created`, `noop` or an adopted live session. Report. | Refused (a refused trust path included), failed, rolled back, or an adopted session that is not live. Report `reasons`, `step`, `reason`, `rollback`. If stdout holds no JSON, show stderr and stop. | `claimAccount` not set, or invalid config. Stop. | Wrong arguments (for example a prompt that starts with `-`). Ask for another. | Not used. |
 | `dispatch --task` | `created`, `noop` or an adopted live session. Report. | Refused (`task-active` included), failed, rolled back, or an adopted session that is not live. Report `step`, `reason`, `rollback`. If stdout holds no JSON, show stderr and stop. | Invalid config. Stop. | Usage error: a missing or bad slug, a slug that is too long, an unknown repository, or a prompt that starts with `-`. Ask for another. | Not used. |
@@ -417,7 +417,7 @@ This skill was written for `coach.contract: 2`. The preflight refuses any other 
 | `sync` | `errors`, `stopped.reason`, `stopped.resetAt` |
 | `status` | `agents.ok`, `agents.error`, `workers[].key`, `state`, `reason`, `detail`, `session.agentsState`, `session.shortId`, `lease.state`, `issue.title`, `issue.state`, `issue.closingPrs`, `tasks[].key`, `tasks[].state`, `tasks[].reason`, `tasks[].detail`, `tasks[].lease.state`, `tasks[].session.agentsState`, `tasks[].session.shortId` |
 | `watch` | `event`, `key`, `reason`, `detail`, `since`, `cursor`, `polls`, `agentsErrors` |
-| `ready` | `ready[].key`, `ready[].title`, `untriaged[].repo`, `untriaged[].count`, `untriaged[].keys`, `untriaged[].onlyReason`, `now[].key`, `now[].title`, `now[].ready`, `now[].reasons`, `now[].conflict`, `next[].repo`, `next[].count`, `issues[].key`, `issues[].title`, `issues[].ready` |
+| `ready` | `ready[].key`, `ready[].title`, `untriaged[].repo`, `untriaged[].count`, `untriaged[].keys`, `untriaged[].onlyReason`, `now[].key`, `now[].title`, `now[].ready`, `now[].reasons`, `next[].repo`, `next[].count`, `issues[].key`, `issues[].title`, `issues[].ready` |
 | `class` | `status`, `class`, `previous`, `reason` |
 | `why` | `ready`, `reasons` |
 | `dispatch` | `status`, `key`, `step`, `claim`, `rollback`, `reasons`, `reason`, `shortId`, `path` |

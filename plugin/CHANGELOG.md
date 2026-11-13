@@ -7,6 +7,11 @@ and follows [semantic versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- **The class comes from the project Iteration field, not from labels.** The skill now says that the coordinator derives the class from the Iteration field of the repository's GitHub project: the current iteration is Now, the first one that starts after today is Next, and every other issue is Later. `class` puts the issue's project item in an iteration, or clears it for `later`, instead of writing labels. The skill reports its new refusals (a project with no Iteration field, and `now` or `next` when the project has no current or no next iteration) and its new exit 2 (a repository with no `project`). It says that the change shows without a `sync` only when the coordinator wrote its cache. The overview no longer marks Now entries that carry both class labels, and the skill no longer reads `now[].conflict`, which is always `false`.
+  - **Consumers:** the contract number does not change. The skill matches a workspace CLI that reads the class from the project Iteration field.
+
 ## [0.3.0] - 2026-11-12
 
 ### Added
