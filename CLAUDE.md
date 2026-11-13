@@ -31,7 +31,7 @@ This repository is the **`gvt-fleet` plugin** for Claude Code. It ships one skil
 - **Tags:** `v<semver>`, annotated, and equal to the `version` in `plugin.json`.
 - **Changelog:** each new invocable skill adds an entry under `[Unreleased]` in `plugin/CHANGELOG.md` and needs a version bump at release. So does a contract bump (see "Coordinator contract").
 - **License:** MIT-0.
-- **No machine paths and no private names** in any file. `.github/scripts/leak-guard.sh` enforces this. Read the script for the blocked names, and do not copy them into a file.
+- **No machine paths and no private names** in any file. `.github/scripts/leak-guard.sh` enforces this. Read the script for the blocked names, and do not copy them into a file. The rule also holds for issue and pull request bodies, which no check reads. This repository is public and the workspace repository is private. A body that depends on a workspace issue describes it in prose, and the workspace issue links back to this repository. Observed in triage on #29: the split issue #30 is blocked by a workspace issue and names it only in prose.
 - **README:** `README.md` summarises what the overview and each mode show. A change to what they show also updates that summary, in the same commit. No check ties the two together. Observed on #7: the overview changed, and only the code review found the stale README sentence.
 - **Skill names** are short nouns.
 - **Decision records** go in `docs/decisions/`, numbered `NNNN-kebab-title.md`. Version 0.1.0 ships none. The first record is 0001. An issue body does not write the number of a record it proposes. It says "a decision record in `docs/decisions/`", and the record takes the next free number when it is written. A literal goes stale when another record lands while the issue is open, as for the contract number (see "Coordinator contract"). Observed in triage on #18: the body proposed `0002`.
@@ -47,6 +47,8 @@ The skill reads the keys in the CLI's contract table (the workspace's `wiki/coor
 - An issue goes to the workspace repository, asking to list the key in the table and pin it in the CLI's contract test. Adding a key does not raise the contract number.
 
 Observed on #6: the `wrap` result carries `branchRecord`, which the skill needs for rule 5, but the CLI's `wrap` row did not list it.
+
+A CLI change that the skill adopts can also make `docs/issue-triage.md` stale, for example its Class section and its "Set coordinator class" recipe. An issue that adopts such a change names both files. No check compares the triage contract with the CLI. Observed in triage on #29: the body named only `SKILL.md`, and the triage contract still said that labels keep the class (fixed in #31).
 
 An issue body says whether its change raises the contract number. It does not write the number as a literal. A literal goes stale when the CLI raises the number while the issue is open. Observed in triage on #7 and #8: both said the number "stays 1" while the skill already pinned 2.
 
