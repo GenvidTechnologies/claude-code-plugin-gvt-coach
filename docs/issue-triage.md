@@ -101,6 +101,21 @@ not give a line number. A line number goes stale when another change lands in
 the file while the issue is open. Observed on #15: the body cited
 `SKILL.md:296`, and one merged pull request later the sentence was at line 375.
 
+An issue names the repository that owns each part it changes. The coordinator
+owns its default prompts and its result keys. The skill owns only the arguments
+it passes and the keys it reads. Observed in triage on #34: the body put "the
+dispatch prompt guidance" in this repository, and it called the coordinator's
+default "the default dispatch prompt". The skill passes no prompt by default,
+so the change needed either a CLI change or a prompt that the skill composes.
+The coach chose the composed prompt (#37).
+
+An issue that moves or renames a file that a gvt-dev skill reads names the
+`.gvt-agent.json` `paths` key the skill finds it by, and that key's default.
+Observed in triage on #33: the body said to repoint the `paths` keys that name
+`docs/`, but the only key was `plugin_root`. gvt-dev 5.0.0 finds the triage
+contract through `paths['docs/issue-triage.md']` and the decision records
+through `paths['docs/decisions/']`, so the move must add both keys.
+
 ## Splitting
 
 Split when one issue bundles unrelated concerns, or when a single piece of work
