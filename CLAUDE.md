@@ -48,6 +48,13 @@ The skill reads the keys in the CLI's contract table (the workspace's `wiki/coor
 
 Observed on #6: the `wrap` result carries `branchRecord`, which the skill needs for rule 5, but the CLI's `wrap` row did not list it.
 
+The reverse case: the skill stops reading a key. Then:
+
+- The skill's own contract table drops the key.
+- An issue goes to the workspace repository, asking to drop the key from the CLI's contract table. The CLI output does not change, so the skill's change does not raise the contract number.
+
+An issue that makes a key meaningless says whether the skill keeps reading it. When an issue follows a workspace decision record, read that record before the change: it can say what happens to a key. Observed on #29: the skill stopped reading `now[].conflict`, which is always `false` since the class moved to the project Iteration field. The workspace decision record had already said that the key stays. It was read only after the merge, and the CLI's table still listed the key.
+
 A CLI change that the skill adopts can also make `docs/issue-triage.md` stale, for example its Class section and its "Set coordinator class" recipe. An issue that adopts such a change names both files. No check compares the triage contract with the CLI. Observed in triage on #29: the body named only `SKILL.md`, and the triage contract still said that labels keep the class (fixed in #31).
 
 An issue body says whether its change raises the contract number. It does not write the number as a literal. A literal goes stale when the CLI raises the number while the issue is open. Observed in triage on #7 and #8: both said the number "stays 1" while the skill already pinned 2.
