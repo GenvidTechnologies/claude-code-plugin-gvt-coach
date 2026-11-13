@@ -109,6 +109,12 @@ checkboxes referencing new issues) when the parent is a tracking umbrella; prefe
 **separate issues** when the parts share no parent. Keep the original as the
 canonical/umbrella and move each split-out concern's detail into its own issue.
 
+When new issues refer to each other, file first the one whose body has no
+number to fill in. The others can then carry its number, and no issue needs an
+edit after it is filed. Observed in the triage of #29: the split issue #30
+named its workspace blocker in prose, so it went first, and the workspace
+issue was filed with #30 already in its body.
+
 ## Duplicates
 
 Policy: **link, do not auto-close.** For a duplicate cluster, choose the canonical
