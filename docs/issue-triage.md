@@ -64,6 +64,10 @@ Propose a class for each triaged issue. The proposal defaults to Later. Set it
 only with the coach's approval, through the recipes "Set coordinator class" and
 "Set project Class".
 
+For Later on an issue that is not in the project, run only "Set project Class".
+`class later` does not add the issue to the project, and an issue with no
+iteration is already Later. Done in the triage of #39 and #40.
+
 ## Labels
 
 - category — exactly one of `bug` / `enhancement` / `documentation` / `question`.
@@ -155,6 +159,7 @@ When a recipe's set would be empty, omit its --remove-label flag.
 {otherTypes} is the set of category labels, written out in full, with the label being added removed.
 
 - Set category: `gh issue edit {id} --add-label "{type}" --remove-label "{otherTypes}"`
+- Check a body before any write that posts it (Edit body, Comment, Create split issue): `grep -n -i -E '<pattern>' {tmpfile}`, where `<pattern>` is the `always` pattern of `.github/scripts/leak-guard.sh`. Any output blocks the write. The leak guard reads only tracked files, so it never sees an issue body. Observed in the triage of #40: the body as filed named the private workspace issue and pull request, and the rewrite named them in prose.
 - Edit body (language fix / fill missing info): `gh issue edit {id} --body-file {tmpfile}` — the skill writes the approved new body to `{tmpfile}` first
 - Comment: `gh issue comment {id} --body-file {tmpfile}` — the skill writes the comment text to `{tmpfile}` first
 - Flag missing info: `gh issue edit {id} --add-label {needsInfoLabel}` (i.e. `question`; pair with a Comment saying what's missing)
